@@ -1,0 +1,60 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# env files
+.env*.local
+.env
+
+# build output
+dist/
+tsconfig.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Agency workflow — local only, not part of the live site
+.claude/
+CLAUDE.md
+clients/
+campaigns/
+
+# Video assets — hosted on Cloudflare R2, never committed (346 MB).
+# Local dev reads them from here; production uses NEXT_PUBLIC_VIDEO_BASE.
+public/videos/
+
+# ── Working media & agency material — NEVER deployed ────────────────────────
+# The site needs only: app/, components/, lib/, config files, favicons, and
+# public/images/ai-video/** (posters) + the three hero images client.config names.
+# Everything below is source footage, working masters, research or local scripts.
+public/AI REEL STRATEGY/
+public/images/Master/
+public/images/ref/
+public/images/brand/
+public/audio/
+workflow/
+*.mp4
+*.wav
+*.zip
+
+# Agency scripts, research and briefs — local only
+build-umevio-meta-matrix.cjs
+generate-voiceovers.cjs
+brand-research-Umevio.md
+FABLE5-ASSESSMENT-PROMPT.md
+
+# Unreferenced working images (kept locally). The site uses only
+# hero/founder-portrait.png, hero/hero-founder.jpg, hero/solution-studio.png and logo.png.
+public/images/Heigen*
+public/images/hero/ChatGPT*
+public/images/hero/ElevenLabs*
+public/images/hero/topaz*
