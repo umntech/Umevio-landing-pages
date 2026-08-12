@@ -58,3 +58,9 @@ public/images/Heigen*
 public/images/hero/ChatGPT*
 public/images/hero/ElevenLabs*
 public/images/hero/topaz*
+
+# Vercel local link
+.vercel
+
+.vercel
+.env*
