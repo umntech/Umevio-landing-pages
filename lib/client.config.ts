@@ -136,10 +136,11 @@ export const client = {
   },
 
   // ── Callback form endpoint (Formspree) ──────────────────────────────────────
-  // Same endpoint the main umevio.com site uses. Every submission carries a
-  // `source` field so ad-page leads can be told apart from main-site leads.
-  // NOTE: Formspree's free tier caps submissions per month — watch it once ads run.
-  formEndpoint: 'https://formspree.io/f/xjgpnglz',
+  // DEDICATED form for the ad pages — separate from umevio.com's contact form
+  // (xjgpnglz), so ad leads get their own inbox and their own 50/month allowance
+  // rather than competing with general enquiries. Every submission also carries a
+  // `source` field.
+  formEndpoint: 'https://formspree.io/f/xkjwzzaj',
 
   // ── Callback form UI ───────────────────────────────────────────────────────
   form: {
