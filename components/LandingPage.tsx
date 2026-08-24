@@ -1,3 +1,8 @@
+/* NOTE: this component's styles (glass-card, cta-btn, mesh-bg-*, eyebrow-pill,
+   pain-card, step-card, callback-input, testi-*, …) used to live in
+   app/globals.css. They are Proalign's cyan/navy system, not Umevio's, so they
+   now sit unimported in app/legacy-proalign.css. No route renders this file.
+   If you route it again, import that stylesheet from the route. */
 'use client';
 
 import Image from 'next/image';

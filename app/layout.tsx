@@ -13,11 +13,20 @@ const outfit = Outfit({
 const dmSerif = DM_Serif_Display({
   subsets: ["latin"],
   weight: "400",
+  // Italic is loaded deliberately: the editorial lede and pull-quotes on
+  // /ai-video set body-size copy in italic serif, which is the cheapest
+  // available upgrade in perceived quality. Without it the browser would
+  // synthesise a slanted roman and look wrong.
+  style: ["normal", "italic"],
   variable: "--font-dmserif",
   display: "swap",
 });
 
 export const metadata: Metadata = {
+  /* Required for Next to turn the relative og:image paths on child routes into
+     absolute URLs — without it the build warns and falls back to localhost:3000,
+     which would make every shared link show a broken image. */
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://ads.umevio.com"),
   title: "Umevio",
   description: "Performance marketing studio — Meta & Google Ads, AI creative, and landing pages. Founder-led.",
 };

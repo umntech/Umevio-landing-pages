@@ -1,19 +1,22 @@
 'use client';
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { client } from '@/lib/client.config';
 
 /**
- * AiVideoLanding — the /ai-video page, built from scratch on the REAL umevio.com
- * design system (warm-dark ground, rouge accent, DM Serif + Outfit), NOT on the
- * inherited Proalign template.
- *
- * Tokens are taken verbatim from the live site's :root — warm-dark #1C1208,
- * ink #141010, surface #2A1F12 / #332618, rouge #D94F3D, turmeric #E8A838,
- * sage #5C7A5F, dust #F0E9DF, muted #A89880, dim #6B5A47.
+ * AiVideoLanding — the /ai-video page, built on the REAL umevio.com design
+ * system (warm ink ground, cream paper, rouge accent, DM Serif + Outfit), NOT
+ * on the inherited Proalign template.
  *
  * GUARDRAIL: not one invented number on this page. Every figure is a price, a
  * duration or a capacity — all true, all verifiable.
+ *
+ * ── Design system (added in the premium pass) ───────────────────────────────
+ * Everything visual now comes from the four scales below: T (colour), SP
+ * (space), RA (radius), FS (type). Before this, ~40 hand-written rgba literals
+ * and half-pixel font sizes were copy-pasted between sections, which is why
+ * every section looked identical — there was no system to vary, only defaults
+ * to repeat. Add a variation by composing these, never by inventing a literal.
  */
 
 /* ── Where the video lives ────────────────────────────────────────────────
@@ -21,11 +24,10 @@ import { client } from '@/lib/client.config';
    NEXT_PUBLIC_VIDEO_BASE to the R2 public base URL (no trailing slash) and every
    path below follows it. Unset, it falls back to /videos so local development
    works from public/videos — which is gitignored, so 346 MB of video never
-   enters the repo. Filenames are flat and unique, so the bucket is a flat
-   drop of the same files. */
+   enters the repo. */
 const V = process.env.NEXT_PUBLIC_VIDEO_BASE || '/videos';
 
-/* ── Brand tokens (from umevio.com :root) ─────────────────────────────────── */
+/* ── Colour (from umevio.com :root) ───────────────────────────────────────── */
 const T = {
   warmDark: '#1C1208',
   ink: '#141010',
@@ -38,17 +40,88 @@ const T = {
   dust: '#F0E9DF',
   paper: '#FAF6F0',
   muted: '#A89880',
-  dim: '#6B5A47',
+  /* Lifted from #6B5A47. That measured 2.86:1 on ink and 2.44:1 on surface —
+     failing AA even for large text — and was carrying the pricing sub-line, the
+     hero caption, the whole strip and the footer. Muddy small type is one of
+     the most reliable "cheap" tells. This clears 4.5:1 and still recedes. */
+  dim: '#8A7660',
+  /* Ink-side equivalent, for the inverted (paper-ground) section. */
+  inkMuted: '#6B5A47',
 };
 
-/* ── Reveal on scroll — one or two elements per view, never everything ────── */
-function useReveal<T extends HTMLElement>() {
-  const ref = useRef<T>(null);
+/* ── Space — one scale, no arbitrary gaps ─────────────────────────────────── */
+const SP = { xs: 6, sm: 10, md: 16, lg: 24, xl: 34, xxl: 52, huge: 76 } as const;
+
+/* ── Radius — three steps, not eleven ─────────────────────────────────────── */
+const RA = { sm: 14, md: 22, lg: 30, pill: 999 } as const;
+
+/* ── Type — a real ratio scale. The old sizes (12.5 / 13.5 / 15.5 / 16.5 / 19 /
+   44 / 46) were fussed half-pixels: nothing wrong individually, collectively
+   improvised. ───────────────────────────────────────────────────────────── */
+const FS = { xs: 13, sm: 15, base: 17, md: 21, lg: 28, xl: 38, xxl: 52, huge: 76 } as const;
+
+const SERIF = 'var(--font-dmserif), Georgia, serif';
+
+/* ── Section padding — the page rhythm now alternates instead of repeating a
+   single clamp() five times. ────────────────────────────────────────────── */
+const PAD = {
+  tight: 'clamp(48px, 6vw, 68px)',
+  normal: 'clamp(58px, 8vw, 88px)',
+  wide: 'clamp(76px, 10vw, 124px)',
+} as const;
+
+/**
+ * The card recipe.
+ *
+ * The old cards all wore `1px solid rgba(240,233,223,.10)` — a full-perimeter
+ * 10%-white hairline on a dark gradient. That is the 2022 Linear/Vercel look; it
+ * reads generic-tech and fights the warm-editorial direction in CLAUDE.md.
+ * Cards are now separated by *value and space*, with a single top-edge inset
+ * highlight that reads as light falling on an edge rather than a drawn box.
+ */
+function card(opts: { lit?: boolean; radius?: number } = {}): CSSProperties {
+  const { lit = false, radius = RA.md } = opts;
+  return {
+    height: '100%',
+    borderRadius: radius,
+    background: lit
+      ? `linear-gradient(180deg, rgba(217,79,61,.17) 0%, ${T.ink} 58%)`
+      : `linear-gradient(180deg, ${T.surface2} 0%, ${T.ink} 100%)`,
+    boxShadow: lit
+      ? `inset 0 1px 0 rgba(226,101,79,.42), 0 1px 0 rgba(217,79,61,.20), 0 26px 60px rgba(0,0,0,.34)`
+      : `inset 0 1px 0 rgba(255,255,255,.07), 0 18px 44px rgba(0,0,0,.26)`,
+  };
+}
+
+/* ── Reveal on scroll ─────────────────────────────────────────────────────── */
+/**
+ * Two paths, by capability.
+ *
+ * Where the browser supports CSS scroll-driven animation, the reveal is tied to
+ * scroll *progress* via `animation-timeline: view()` — continuous, scrubbable,
+ * and the thing that separates a page that feels expensive from one that fires
+ * a binary fade. No JS, no observer.
+ *
+ * Everywhere else, the old IntersectionObserver still runs.
+ */
+function supportsViewTimeline() {
+  /* window.CSS, not the bare CSS global: in a .tsx the unqualified name
+     resolves to a type, not the CSSOM object. */
+  return typeof window !== 'undefined'
+    && typeof window.CSS?.supports === 'function'
+    && window.CSS.supports('animation-timeline: view()');
+}
+
+function useReveal<E extends HTMLElement>() {
+  const ref = useRef<E>(null);
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (
+      supportsViewTimeline() ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    ) {
       setShown(true);
       return;
     }
@@ -73,6 +146,172 @@ function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * The work rail.
+ *
+ * A native horizontal scroller that drifts on its own until someone interacts,
+ * then gets out of the way. Two things have to be true at once: the visitor can
+ * reach any video immediately (scroll, swipe, drag, arrows), and the strip still
+ * advertises itself when nobody is touching it.
+ *
+ * The track renders its items twice, so the drift can wrap by subtracting half
+ * the scroll width — the seam is invisible because the content either side of it
+ * is identical.
+ */
+const RAIL_SPEED = 42; // px per second
+
+function useRail() {
+  const ref = useRef<HTMLDivElement>(null);
+  const paused = useRef(false);
+  const drag = useRef({ active: false, startX: 0, startLeft: 0, moved: false });
+  /* Hover pausing covers the mouse. Touch has no hover, and the drag handlers
+     deliberately leave touch to the browser — so without this the drift would
+     keep adding scrollLeft while a finger is mid-swipe and all through the
+     momentum afterwards, i.e. the strip would fight the user on every phone. */
+  const idleUntil = useRef(0);
+  const [dragging, setDragging] = useState(false);
+
+  /* Consulted by the tile's click handler: a drag that ends over a tile must not
+     also open that tile's video. */
+  const movedRef = useRef(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    /* The wrap distance is the width of ONE copy of the list, measured as the
+       gap between the first tile and its duplicate. Deriving it from
+       scrollWidth / 2 would be wrong: the track carries 16px of padding on both
+       ends, so half the scroll width overshoots a copy by 8px and the seam
+       visibly jumps every lap. */
+    let copyW = 0;
+    const measure = () => {
+      const tiles = el.querySelectorAll<HTMLElement>('.mq-tile');
+      const n = tiles.length / 2;
+      copyW = n >= 1 && tiles[n] ? tiles[n].offsetLeft - tiles[0].offsetLeft : 0;
+    };
+    measure();
+
+    /* Start just off zero. The backward wrap below triggers at the left edge,
+       and a rail that loads with the pointer already over it (so the drift is
+       paused, so scrollLeft never leaves 0) would otherwise jump a whole copy
+       on its first frame. */
+    if (el.scrollLeft === 0) el.scrollLeft = 2;
+
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+
+    /* Any hands-on input parks the drift for a moment. touchmove refreshes the
+       window continuously, so a long swipe plus its momentum is fully covered. */
+    const HOLD = 2500;
+    const hold = () => { idleUntil.current = performance.now() + HOLD; };
+    const holdEvents: (keyof HTMLElementEventMap)[] = ['touchstart', 'touchmove', 'touchend', 'wheel'];
+    holdEvents.forEach((n) => el.addEventListener(n, hold, { passive: true }));
+
+    const wrap = () => {
+      if (copyW <= 0) return;
+      if (el.scrollLeft >= copyW) el.scrollLeft -= copyW;
+      else if (el.scrollLeft <= 1) el.scrollLeft += copyW;
+    };
+
+    /* Manual scrolling has to wrap too, otherwise dragging simply hits the end
+       of the strip. This runs even under reduced motion, where the rail does not
+       drift but is still fully scrollable. */
+    el.addEventListener('scroll', wrap, { passive: true });
+
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let raf = 0;
+    if (!still) {
+      let last = performance.now();
+      const tick = (now: number) => {
+        const dt = Math.min(now - last, 64) / 1000; // clamped, so a backgrounded tab does not lurch
+        last = now;
+        if (!paused.current && !drag.current.active && now >= idleUntil.current) {
+          el.scrollLeft += RAIL_SPEED * dt;
+          wrap();
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    }
+
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      ro.disconnect();
+      el.removeEventListener('scroll', wrap);
+      holdEvents.forEach((n) => el.removeEventListener(n, hold));
+    };
+  }, []);
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    /* Touch is left to the browser: native momentum scrolling beats anything
+       reimplemented here. This is only for mouse and pen. */
+    if (e.pointerType === 'touch') return;
+    const el = ref.current;
+    if (!el) return;
+    drag.current = { active: true, startX: e.clientX, startLeft: el.scrollLeft, moved: false };
+    movedRef.current = false;
+    setDragging(true);
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = ref.current;
+    if (!el || !drag.current.active) return;
+    const dx = e.clientX - drag.current.startX;
+    if (Math.abs(dx) > 6) { drag.current.moved = true; movedRef.current = true; }
+    el.scrollLeft = drag.current.startLeft - dx;
+  };
+
+  const endDrag = () => {
+    if (!drag.current.active) return;
+    drag.current.active = false;
+    setDragging(false);
+    /* Cleared on the next frame so the click that follows this pointerup can
+       still see that a drag happened. */
+    requestAnimationFrame(() => { movedRef.current = false; });
+  };
+
+  const nudge = (dir: 1 | -1) => {
+    const el = ref.current;
+    if (!el) return;
+    const tile = el.querySelector('.mq-tile') as HTMLElement | null;
+    const step = (tile?.offsetWidth ?? 220) + 16;
+    idleUntil.current = performance.now() + 1200; // let the smooth scroll land
+    el.scrollBy({ left: dir * step * 2, behavior: 'smooth' });
+  };
+
+  return {
+    ref, dragging, movedRef, nudge, endDrag,
+    onPointerDown, onPointerMove,
+    pause: () => { paused.current = true; },
+    resume: () => { paused.current = false; },
+  };
+}
+
+/* ── Section eyebrow ──────────────────────────────────────────────────────── */
+/**
+ * Eyebrow colour used to be arbitrary — rouge, turmeric and sage appeared
+ * across sections with no rule, which reads as improvisation. It is now
+ * systematic: rouge = process (how the thing works), turmeric = proof (evidence
+ * you can check), sage = ethics (what I won't do).
+ */
+const EYEBROW = { process: T.rouge, proof: T.turmeric, ethics: T.sage } as const;
+
+function Eyebrow({ tone, children, onPaper = false }: { tone: keyof typeof EYEBROW; children: ReactNode; onPaper?: boolean }) {
+  return (
+    <p style={{
+      fontSize: FS.xs,
+      letterSpacing: '.18em',
+      textTransform: 'uppercase',
+      fontWeight: 600,
+      /* Sage at its brand value is too light to sit on paper; this is the same
+         hue darkened until it clears AA against #FAF6F0. */
+      color: onPaper && tone === 'ethics' ? '#43593F' : EYEBROW[tone],
+      margin: `0 0 ${SP.md}px`,
+    }}>{children}</p>
   );
 }
 
@@ -131,10 +370,17 @@ const STEPS = [
   { n: '03', t: 'Get finished videos', d: 'Script written, video made, captions and music on it, ready to post. You will never get raw AI output with your face on it.' },
 ];
 
+/* `was` carries the genuine introductory price, shown against the struck standard
+   price rather than buried as a raw number in a bullet. `wasLabel` exists because
+   the monthly tiers discount a *month* and the one-off discounts a *video* —
+   labelling the single "first month" would be a small lie.
+   Every figure here comes from the founder-confirmed table in
+   clients/umevio/growth-system/12-ai-video-growth-plan.md §5.3. Change the plan
+   first, then this file — never improvise a price here. */
 const TIERS = [
-  { name: 'Try one', price: '₹5,000', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'No commitment'], hot: false },
-  { name: 'Content engine', price: '₹17,500', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'First month ₹14,875', 'You approve every script', 'No lock-in, cancel any month'], hot: true },
-  { name: 'Double volume', price: '₹30,000', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine', 'First month ₹25,500'], hot: false },
+  { name: 'Try one', price: '₹5,000', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'No commitment'], hot: false, risk: true, was: '₹3,500', wasLabel: 'first reel · ₹5,000 after' },
+  { name: 'Content engine', price: '₹17,500', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'You approve every script', 'No lock-in, cancel any month'], hot: true, risk: false, was: '₹14,875', wasLabel: 'first month' },
+  { name: 'Double volume', price: '₹30,000', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine'], hot: false, risk: false, was: '₹25,500', wasLabel: 'first month' },
 ];
 
 const FAQS = [
@@ -142,7 +388,7 @@ const FAQS = [
   { q: "Can't I just do this myself with the software?", a: 'In principle, yes, the tools are available to anyone. But the software is the easy part. What you would still be doing every single week is choosing the topic, researching it, writing a script that sounds like you, generating, cutting, captioning, scoring and actually shipping it. That is the work, and that is what I sell. If you have those hours free and enjoy that craft, do it yourself. I mean that.' },
   { q: 'How much of my time does this actually take?', a: 'One fifteen-minute recording at the start. After that: send a topic, reply "ok" to a script. That is the whole ongoing commitment.' },
   { q: 'Are you an agency?', a: 'No. One person, me. I run the ads, write the scripts and edit the videos myself. No account managers, nothing handed to a junior. That is also why the client count is capped.' },
-  { q: 'What if I hate the result?', a: 'Buy one video for ₹5,000 and find out before committing to anything monthly. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
+  { q: 'What if I hate the result?', a: 'Buy your first video for ₹3,500 and find out before committing to anything monthly. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
   { q: 'Is this allowed on Instagram and YouTube?', a: 'Yes, with disclosure. Both platforms ask you to label realistic AI-generated content, and that label gets applied. The rules exist to stop people passing synthetic footage off as real, which is the opposite of how this is built.' },
   { q: 'Whose account does my avatar live in?', a: 'Mine, operated under a written agreement. It is used only for scripts you approved, never shown or transferred to anyone, deleted within seven days if you ask. Your original recording stays yours and I will send you a copy whenever you want it, so you can rebuild elsewhere if you ever leave.' },
 ];
@@ -167,6 +413,12 @@ const LIBRARY = [
   { s: 'mpi-retire', v: `${V}/mpi-retire.mp4`, p: '/images/ai-video/library/mpi-retire.webp', c: 'MPI Invest', t: 'Will AI plan your retirement?' },
 ];
 
+/* One rail, carrying the whole library. Earlier passes split it (two
+   counter-scrolling rows, then a rail plus a static grid) — both restated the
+   same work twice. The rail alone shows every piece at full size and keeps the
+   section to a single gesture. */
+const WALL_MARQUEE = LIBRARY;
+
 const MANIFESTO = [
   'Umevio uses AI replicas — with the written consent of the person cloned, script approval before anything renders, and platform AI labels wherever a viewer could mistake a replica for a live recording.',
   'We never build synthetic customers, fake testimonials, or anyone’s likeness without their personal consent. If that is what a project needs, we are the wrong studio.',
@@ -174,57 +426,113 @@ const MANIFESTO = [
   'I take six video clients at most. That is arithmetic rather than a sales tactic. This runs alongside other work, and six is the point where the quality would start to slip.',
 ];
 
-/* ── Page ─────────────────────────────────────────────────────────────────── */
+/* ── Page CSS ─────────────────────────────────────────────────────────────── */
 
 const CSS = `
+        /* ── Reveal ──
+           Fallback path: a transition flipped by IntersectionObserver.
+           Enhanced path: tied to scroll progress, so the motion scrubs with the
+           page instead of firing once. */
         .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s cubic-bezier(.22,.61,.36,1), transform .7s cubic-bezier(.22,.61,.36,1); }
         .reveal[data-shown="true"] { opacity: 1; transform: none; }
-        @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; transition: none !important; } }
-        .av-grid { background-image: linear-gradient(rgba(240,233,223,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(240,233,223,.045) 1px, transparent 1px); background-size: 64px 64px; }
-        .av-btn { transition: background-color .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease; }
-        .av-card { transition: border-color .2s ease, background-color .2s ease; }
+        @supports (animation-timeline: view()) {
+          .reveal { opacity: 1; transform: none; transition: none;
+            animation: rv-rise linear both;
+            animation-timeline: view();
+            animation-range: entry 4% cover 24%; }
+          @keyframes rv-rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+        }
+        @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1 !important; transform: none !important; transition: none !important; animation: none !important; } }
+
+        /* ── Grain ──
+           Replaces the old 64px line grid, which was a startup-dashboard motif
+           fighting a warm-editorial brand. This is paper tooth: it reads as
+           print stock rather than a dev tool. */
+        .av-grain { position: relative; isolation: isolate; }
+        .av-grain::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1; opacity: .55;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+          background-size: 200px 200px; mix-blend-mode: overlay; }
+        .av-grain > * { position: relative; z-index: 2; }
+        .av-grain--paper::after { mix-blend-mode: multiply; opacity: .42; }
+
+        .av-btn { transition: background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .2s ease; }
+        .av-btn:hover { transform: translateY(-1px); }
+        .av-card { transition: box-shadow .28s ease, transform .28s ease; }
         a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
           outline: 2px solid ${T.turmeric}; outline-offset: 3px; border-radius: 6px;
         }
         .av-in::placeholder { color: ${T.dim}; }
 
-        /* ── The work wall ── two rows, opposite directions, paused on hover ── */
-        .mq { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 7%, #000 93%, transparent 100%); }
-        .mq-track { display: flex; gap: 14px; width: max-content; padding: 2px 14px; animation: mq-f 52s linear infinite; }
-        .mq-track[data-dir="rev"] { animation-name: mq-r; animation-duration: 58s; }
-        .mq:hover .mq-track, .mq:focus-within .mq-track { animation-play-state: paused; }
-        @keyframes mq-f { from { transform: translateX(0); }        to { transform: translateX(-50%); } }
-        @keyframes mq-r { from { transform: translateX(-50%); }     to { transform: translateX(0); } }
-        @media (prefers-reduced-motion: reduce) {
-          .mq { overflow-x: auto; }
-          .mq-track { animation: none; }
-        }
-        .mq-tile { position: relative; flex: 0 0 auto; width: 166px; border-radius: 16px; overflow: hidden;
-          border: 1px solid rgba(240,233,223,.12); background: ${T.ink}; padding: 0; display: block; cursor: pointer;
-          transition: border-color .2s ease, transform .2s ease; }
-        .mq-tile:hover { border-color: rgba(217,79,61,.62); }
-        .mq-tile img { width: 100%; height: 295px; object-fit: cover; display: block; }
-        .mq-play { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 999px;
-          display: grid; place-items: center; background: rgba(217,79,61,.92); color: ${T.paper}; }
-        .mq-meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 44px 12px 11px; text-align: left;
+        /* Custom select chevron. The native control was rendering the OS arrow
+           and OS option list — a grey Windows dropdown in the middle of a dark
+           form, and the most visible break in the design. */
+        .av-select { -webkit-appearance: none; -moz-appearance: none; appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9' fill='none'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%23A89880' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          background-repeat: no-repeat; background-position: right 18px center; padding-right: 46px !important; }
+        .av-select option { background: ${T.ink}; color: ${T.dust}; }
+
+        /* ── Wordmark ── no nav links, no escape routes; just proof of who this
+           is. Previously the brand did not appear until the footer, so a cold ad
+           click scrolled the entire page without ever seeing it. */
+        .av-mark { position: absolute; top: clamp(20px, 3vw, 30px); left: 20px; z-index: 3; text-decoration: none;
+          font-family: ${SERIF}; font-size: ${FS.md}px; color: ${T.paper}; letter-spacing: -.01em; line-height: 1; }
+        @media (min-width: 1160px) { .av-mark { left: calc((100vw - 1120px) / 2); } }
+
+        /* ── The work wall ──
+           A real horizontal scroller that also drifts on its own, rather than a
+           CSS-animated track. The animation-only version made you wait for a
+           given video to come round; now every input gets through — trackpad
+           swipe, touch, click-drag, and the arrow buttons — and the drift stops
+           the moment anyone touches it. The auto-scroll lives in JS because a
+           transform animation and native scrolling cannot share one element. */
+        .mq-wrap { position: relative; }
+        .mq { overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
+          scrollbar-width: none; -ms-overflow-style: none; cursor: grab;
+          -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 6%, #000 94%, transparent 100%); }
+        .mq::-webkit-scrollbar { display: none; }
+        .mq[data-drag="true"] { cursor: grabbing; }
+        .mq-track { display: flex; gap: 16px; width: max-content; padding: 2px 16px; }
+
+        /* Arrows — the one affordance a mouse-wheel user has, since a vertical
+           wheel does not move a horizontal scroller. Pointer devices only. */
+        .mq-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 4;
+          width: 46px; height: 46px; border-radius: ${RA.pill}px; border: none; display: none;
+          place-items: center; cursor: pointer; color: ${T.dust};
+          background: rgba(20,16,16,.82); backdrop-filter: blur(8px);
+          box-shadow: inset 0 0 0 1px rgba(240,233,223,.20), 0 8px 26px rgba(0,0,0,.44);
+          transition: background-color .2s ease, color .2s ease, transform .2s ease; }
+        @media (min-width: 768px) and (hover: hover) { .mq-nav { display: grid; } }
+        .mq-nav:hover { background: ${T.rouge}; color: ${T.paper}; }
+        .mq-nav--prev { left: 14px; }
+        .mq-nav--next { right: 14px; }
+
+        .mq-tile { position: relative; flex: 0 0 auto; width: 208px; border-radius: ${RA.sm}px; overflow: hidden;
+          border: none; background: ${T.ink}; padding: 0; display: block; cursor: pointer; aspect-ratio: 9 / 16;
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 16px 40px rgba(0,0,0,.34);
+          transition: box-shadow .25s ease, transform .25s ease; }
+        .mq-tile:hover { transform: translateY(-4px);
+          box-shadow: inset 0 0 0 1px rgba(217,79,61,.62), 0 22px 52px rgba(0,0,0,.46); }
+        .mq-tile img, .mq-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .mq-tile video { position: absolute; inset: 0; z-index: 2; }
+        .mq-play { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: ${RA.pill}px;
+          display: grid; place-items: center; background: rgba(217,79,61,.92); color: ${T.paper}; z-index: 3;
+          transition: opacity .2s ease; }
+        .mq-tile[data-preview="true"] .mq-play { opacity: 0; }
+        .mq-meta { position: absolute; left: 0; right: 0; bottom: 0; padding: 46px 13px 12px; text-align: left; z-index: 3;
           background: linear-gradient(180deg, rgba(20,16,16,0) 0%, rgba(20,16,16,.78) 38%, rgba(20,16,16,.97) 72%); }
-        @media (min-width: 768px) {
-          .mq-tile { width: 198px; }
-          .mq-tile img { height: 352px; }
-        }
+        @media (min-width: 768px) { .mq-tile { width: 268px; } }
 
         /* ── Two-column on desktop ──
            A 9:16 video in a full-width column leaves a huge void beside it on a
-           laptop. These two sections put the copy next to the video instead. */
-        .split { display: grid; gap: 30px; }
+           laptop. These sections put the copy next to the video instead. */
+        .split { display: grid; gap: ${SP.xl}px; }
         .split-media { justify-self: start; width: 100%; max-width: 356px; }
         @media (min-width: 920px) {
           .split { grid-template-columns: 1.05fr 0.95fr; gap: 60px; align-items: center; }
           .split-media { justify-self: end; margin-top: 0 !important; max-width: 400px; }
           .split-copy { max-width: 560px; }
         }
-        /* The player: big enough that a 1080 source is actually seen, capped by
-           viewport height so a 9:16 clip never overflows the screen. */
+
         /* ── Hero cover ── a still of the 1080 master + a play affordance ── */
         .hero-cover { position: relative; display: block; width: 100%; padding: 0; border: none;
           background: ${T.ink}; border-radius: 19px; overflow: hidden; cursor: pointer; }
@@ -232,10 +540,11 @@ const CSS = `
         .hc-scrim { position: absolute; inset: 0; background:
           linear-gradient(180deg, rgba(20,16,16,.55) 0%, rgba(20,16,16,0) 30%, rgba(20,16,16,0) 52%, rgba(20,16,16,.86) 100%); }
         .hc-tag { position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; gap: 8px;
-          padding: 8px 13px; border-radius: 999px; background: rgba(20,16,16,.72); border: 1px solid rgba(217,79,61,.5);
-          color: ${T.dust}; font-size: 11px; letter-spacing: .16em; font-weight: 600; backdrop-filter: blur(6px); }
+          padding: 8px 13px; border-radius: ${RA.pill}px; background: rgba(20,16,16,.72);
+          box-shadow: inset 0 0 0 1px rgba(217,79,61,.5);
+          color: ${T.dust}; font-size: ${FS.xs}px; letter-spacing: .16em; font-weight: 600; backdrop-filter: blur(6px); }
         .hc-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-          width: 76px; height: 76px; border-radius: 999px; display: grid; place-items: center;
+          width: 76px; height: 76px; border-radius: ${RA.pill}px; display: grid; place-items: center;
           background: ${T.rouge}; color: ${T.paper}; padding-left: 5px;
           box-shadow: 0 0 0 10px rgba(217,79,61,.16), 0 0 0 22px rgba(217,79,61,.07), 0 16px 44px rgba(0,0,0,.5);
           transition: transform .2s ease, box-shadow .2s ease; }
@@ -243,18 +552,77 @@ const CSS = `
           box-shadow: 0 0 0 12px rgba(217,79,61,.22), 0 0 0 26px rgba(217,79,61,.09), 0 16px 44px rgba(0,0,0,.5); }
         .hc-foot { position: absolute; left: 16px; right: 16px; bottom: 15px; display: flex; align-items: flex-end;
           justify-content: space-between; gap: 12px; text-align: left; }
-        .hc-line { color: ${T.paper}; font-size: 15px; line-height: 1.35; font-weight: 500; max-width: 230px;
+        .hc-line { color: ${T.paper}; font-size: ${FS.sm}px; line-height: 1.35; font-weight: 500; max-width: 230px;
           text-shadow: 0 2px 14px rgba(0,0,0,.8); }
-        .hc-dur { color: ${T.dust}; font-size: 12px; letter-spacing: .08em; padding: 5px 10px; border-radius: 999px;
-          background: rgba(20,16,16,.7); border: 1px solid rgba(240,233,223,.18); flex-shrink: 0; }
+        .hc-dur { color: ${T.dust}; font-size: ${FS.xs}px; letter-spacing: .08em; padding: 5px 10px; border-radius: ${RA.pill}px;
+          background: rgba(20,16,16,.7); box-shadow: inset 0 0 0 1px rgba(240,233,223,.18); flex-shrink: 0; }
         .player-box { max-width: min(400px, calc((100vh - 150px) * 0.5625)); }
         @media (min-width: 768px) { .player-box { max-width: min(480px, calc((100vh - 160px) * 0.5625)); } }
+
+        /* ── Steps rail ──
+           The rule above each step draws itself as you scroll through the
+           section, so the three steps read as a sequence being traversed rather
+           than three cards that happen to be numbered. */
+        .rail { height: 1px; transform-origin: left center; background: linear-gradient(90deg, ${T.rouge}, rgba(217,79,61,0)); }
+        @supports (animation-timeline: view()) {
+          .rail { transform: scaleX(0); animation: rail-draw linear both; animation-timeline: view(); animation-range: entry 12% cover 42%; }
+          @keyframes rail-draw { to { transform: scaleX(1); } }
+        }
+        @media (prefers-reduced-motion: reduce) { .rail { animation: none !important; transform: none !important; } }
+
+        /* ── Floating WhatsApp ──
+           Always on, bottom-right, above everything except the video player.
+           Hidden below 768px because the sticky bar already carries a WhatsApp
+           button there, and two of the same control stacked in the thumb zone
+           is worse than one. It widens to show its label on hover; the label is
+           always in the accessible name regardless. */
+        .av-fab { position: fixed; right: clamp(18px, 2.4vw, 30px); bottom: clamp(18px, 2.4vw, 30px); z-index: 55;
+          display: none; align-items: center; gap: 0;
+          height: 58px; padding: 0 17px; border-radius: ${RA.pill}px; text-decoration: none;
+          background: ${T.rouge}; color: ${T.paper};
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 10px 30px rgba(217,79,61,.36), 0 2px 10px rgba(0,0,0,.34);
+          transition: gap .28s cubic-bezier(.22,.61,.36,1), padding .28s cubic-bezier(.22,.61,.36,1),
+                      background-color .2s ease, box-shadow .25s ease, transform .2s ease; }
+        @media (min-width: 768px) { .av-fab { display: inline-flex; } }
+        .av-fab svg { width: 25px; height: 25px; flex-shrink: 0; }
+        .av-fab-label { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; font-size: ${FS.sm}px; font-weight: 600;
+          transition: max-width .28s cubic-bezier(.22,.61,.36,1), opacity .2s ease; }
+        .av-fab:hover, .av-fab:focus-visible { background: ${T.rougeLit}; transform: translateY(-2px);
+          gap: 11px; padding: 0 23px 0 19px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 16px 40px rgba(217,79,61,.46), 0 2px 10px rgba(0,0,0,.34); }
+        .av-fab:hover .av-fab-label, .av-fab:focus-visible .av-fab-label { max-width: 170px; opacity: 1; }
+        /* A pulse that runs three times and stops, so it draws the eye once
+           without becoming a thing flashing on the page forever. */
+        .av-fab::before { content: ''; position: absolute; inset: 0; border-radius: inherit;
+          box-shadow: 0 0 0 0 rgba(217,79,61,.55); animation: fab-pulse 2.4s ease-out 3; }
+        @keyframes fab-pulse { to { box-shadow: 0 0 0 18px rgba(217,79,61,0); } }
+        @media (prefers-reduced-motion: reduce) {
+          .av-fab, .av-fab-label { transition: none; }
+          .av-fab::before { animation: none; }
+        }
+
+        /* ── Sticky bar ──
+           Was position:fixed unconditionally, so a 1440px desktop got a
+           full-width mobile call/WhatsApp bar pinned across the bottom. It is a
+           thumb-reach affordance; it belongs on phones only. */
+        .av-sticky { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; gap: 10px;
+          padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+          background: rgba(20,16,16,.92); backdrop-filter: blur(12px);
+          box-shadow: inset 0 1px 0 rgba(240,233,223,.12); }
+        @media (min-width: 768px) { .av-sticky { display: none; } }
+        .av-tailpad { height: 108px; }
+        @media (min-width: 768px) { .av-tailpad { height: 0; } }
       `;
+
+/* ── Page ─────────────────────────────────────────────────────────────────── */
 
 export default function AiVideoLanding() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [playing, setPlaying] = useState<(typeof LIBRARY)[number] | null>(null);
   const [heroOn, setHeroOn] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [canHover, setCanHover] = useState(false);
+  const rail = useRail();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [work, setWork] = useState('');
@@ -265,6 +633,15 @@ export default function AiVideoLanding() {
   const [err, setErr] = useState('');
 
   const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
+
+  /* Hover-to-preview is a pointer affordance. On touch it would fire on tap and
+     fight the tap-to-open-player behaviour, so it is gated on a real hover
+     device and on the visitor not having asked for reduced motion. */
+  useEffect(() => {
+    const ok = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setCanHover(ok);
+  }, []);
 
   /* Esc closes the player, and the page behind it must not scroll while it's open. */
   useEffect(() => {
@@ -313,41 +690,88 @@ export default function AiVideoLanding() {
     }
   }
 
+  /* One tile renderer, shared by the marquee and the grid. */
+  function Tile({ item, k }: { item: (typeof LIBRARY)[number]; k: string }) {
+    const on = canHover && preview === k;
+    return (
+      <button
+        onClick={() => { if (!rail.movedRef.current) setPlaying(item); }}
+        onMouseEnter={() => { if (canHover) setPreview(k); }}
+        onMouseLeave={() => setPreview((p) => (p === k ? null : p))}
+        onFocus={() => { if (canHover) setPreview(k); }}
+        onBlur={() => setPreview((p) => (p === k ? null : p))}
+        aria-label={`Play: ${item.c} — ${item.t}`}
+        className="mq-tile"
+        data-preview={on ? 'true' : 'false'}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={item.p} alt="" width={360} height={640} loading="lazy" decoding="async" />
+        {/* Muted, looping, preload="none": nothing is fetched until a pointer
+            actually lands on the tile, and only one tile is ever mounted at a
+            time, so the wall costs no bandwidth until someone is interested. */}
+        {on && (
+          <video src={item.v} muted loop autoPlay playsInline preload="none" aria-hidden tabIndex={-1} />
+        )}
+        <span className="mq-play" aria-hidden>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+        </span>
+        <span className="mq-meta">
+          <span style={{ color: T.turmeric, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', display: 'block' }}>{item.c}</span>
+          <span style={{ color: T.paper, fontSize: FS.sm - 1, lineHeight: 1.3, display: 'block', marginTop: 2 }}>{item.t}</span>
+        </span>
+      </button>
+    );
+  }
+
   return (
     <main style={{ background: T.warmDark, color: T.dust, minHeight: '100vh', overflowX: 'hidden' }}>
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
 
       {/* ── HERO ───────────────────────────────────────────────────────────── */}
-      <section className="av-grid" style={{ position: 'relative', padding: 'clamp(48px, 7vw, 68px) 20px clamp(52px, 7vw, 72px)' }}>
+      <section className="av-grain" style={{ position: 'relative', padding: `clamp(74px, 9vw, 104px) 20px ${PAD.tight}` }}>
         <div aria-hidden style={{ position: 'absolute', inset: 0, background: `radial-gradient(72% 46% at 50% 0%, rgba(217,79,61,.20) 0%, rgba(28,18,8,0) 68%)`, pointerEvents: 'none' }} />
+
+        <a href="#start" className="av-mark" aria-label="Umevio — go to the enquiry form">
+          ume<span style={{ color: T.rouge }}>vio</span>
+        </a>
+
         <div className="split" style={{ position: 'relative', maxWidth: 1120, margin: '0 auto' }}>
 
           <div className="split-copy">
           <Reveal>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, border: `1px solid rgba(217,79,61,.35)`, background: 'rgba(217,79,61,.09)', color: T.rougeLit, borderRadius: 999, padding: '8px 16px', fontSize: 12.5, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 500 }}>
-              <span style={{ width: 6, height: 6, borderRadius: 999, background: T.rouge, display: 'inline-block' }} />
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 9, boxShadow: `inset 0 0 0 1px rgba(217,79,61,.35)`, background: 'rgba(217,79,61,.09)', color: T.rougeLit, borderRadius: RA.pill, padding: '8px 16px', fontSize: FS.xs, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 600 }}>
+              <span style={{ width: 6, height: 6, borderRadius: RA.pill, background: T.rouge, display: 'inline-block' }} />
               AI Video Content Engine
             </div>
           </Reveal>
 
           <Reveal delay={60}>
-            <h1 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(44px, 9vw, 82px)', lineHeight: 1.02, letterSpacing: '-0.02em', margin: '26px 0 0', color: T.paper, maxWidth: 900 }}>
+            <h1 style={{ fontFamily: SERIF, fontSize: 'clamp(46px, 9.4vw, 88px)', lineHeight: 1.0, letterSpacing: '-0.025em', margin: `${SP.lg}px 0 0`, color: T.paper, maxWidth: 900 }}>
               Record once.<br />Post <span style={{ color: T.rouge }}>every day</span>.
             </h1>
           </Reveal>
 
+          {/* The editorial lede. Italic serif at reading size is the single
+              cheapest upgrade in perceived quality available on this page —
+              before this, every word of body copy was Outfit. */}
           <Reveal delay={120}>
-            <p style={{ fontSize: 'clamp(17px, 2.2vw, 21px)', lineHeight: 1.62, color: T.muted, margin: '24px 0 0', maxWidth: 620 }}>
-              AI video for coaches and founders who can&rsquo;t keep filming. You sit down once for fifteen minutes. After that I write the scripts and make the videos for the rest of the month, you okay every one before it goes out, and they all say they&rsquo;re AI.
+            <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 'clamp(19px, 2.4vw, 25px)', lineHeight: 1.5, color: T.dust, margin: `${SP.lg}px 0 0`, maxWidth: 580 }}>
+              AI video for coaches and founders who can&rsquo;t keep filming.
             </p>
           </Reveal>
 
-          <Reveal delay={180}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, margin: '34px 0 0' }}>
-              <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: 999, fontWeight: 600, fontSize: 16.5, minHeight: 44, boxShadow: '0 0 0 1px rgba(217,79,61,.5), 0 18px 46px rgba(217,79,61,.28)', cursor: 'pointer' }}>
+          <Reveal delay={160}>
+            <p style={{ fontSize: FS.base, lineHeight: 1.66, color: T.muted, margin: `${SP.md}px 0 0`, maxWidth: 560 }}>
+              You sit down once for fifteen minutes. After that I write the scripts and make the videos for the rest of the month, you okay every one before it goes out, and they all say they&rsquo;re AI.
+            </p>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, margin: `${SP.xl}px 0 0` }}>
+              <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
                 {client.primaryCTA} {Icon.arrow}
               </a>
-              <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '17px 26px', borderRadius: 999, fontWeight: 500, fontSize: 16.5, minHeight: 44, border: `1px solid rgba(240,233,223,.22)`, cursor: 'pointer' }}>
+              <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '17px 26px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.base, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
                 {Icon.whatsapp} WhatsApp
               </a>
             </div>
@@ -357,7 +781,7 @@ export default function AiVideoLanding() {
 
           {/* Hero video */}
           <Reveal delay={240}>
-            <figure className="split-media" style={{ margin: '38px 0 0' }}>
+            <figure className="split-media" style={{ margin: `${SP.xl}px 0 0` }}>
               <div style={{ position: 'relative', borderRadius: 26, padding: 8, background: `linear-gradient(160deg, rgba(217,79,61,.42), rgba(240,233,223,.06) 42%, rgba(232,168,56,.22))` }}>
                 {heroOn ? (
                   <video
@@ -378,7 +802,7 @@ export default function AiVideoLanding() {
                     <img src="/images/ai-video/d1-poster.webp" alt="Sreevin speaking to camera in the finished, edited video" width={1080} height={1920} />
                     <span className="hc-scrim" aria-hidden />
                     <span className="hc-tag" aria-hidden>
-                      <span style={{ width: 6, height: 6, borderRadius: 999, background: T.rouge, display: 'inline-block' }} />
+                      <span style={{ width: 6, height: 6, borderRadius: RA.pill, background: T.rouge, display: 'inline-block' }} />
                       100% AI · ONE RECORDING
                     </span>
                     <span className="hc-play" aria-hidden>
@@ -391,8 +815,8 @@ export default function AiVideoLanding() {
                   </button>
                 )}
               </div>
-              <figcaption style={{ marginTop: 14, fontSize: 12.5, letterSpacing: '.14em', textTransform: 'uppercase', color: T.dim }}>
-This video is AI, made from one 15-minute recording
+              <figcaption style={{ marginTop: 14, fontSize: FS.xs, letterSpacing: '.14em', textTransform: 'uppercase', color: T.dim }}>
+                This video is AI, made from one 15-minute recording
               </figcaption>
             </figure>
           </Reveal>
@@ -400,33 +824,33 @@ This video is AI, made from one 15-minute recording
       </section>
 
       {/* ── STRIP ──────────────────────────────────────────────────────────── */}
-      <div style={{ borderTop: `1px solid rgba(240,233,223,.09)`, borderBottom: `1px solid rgba(240,233,223,.09)`, background: 'rgba(20,16,16,.45)' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '20px', display: 'flex', flexWrap: 'wrap', gap: '10px 26px', justifyContent: 'center', fontSize: 13.5, letterSpacing: '.1em', textTransform: 'uppercase', color: T.dim }}>
+      <div style={{ boxShadow: `inset 0 1px 0 rgba(240,233,223,.09), inset 0 -1px 0 rgba(240,233,223,.09)`, background: 'rgba(20,16,16,.45)' }}>
+        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '20px', display: 'flex', flexWrap: 'wrap', gap: '10px 26px', justifyContent: 'center', fontSize: FS.xs, letterSpacing: '.1em', textTransform: 'uppercase', color: T.dim }}>
           {['One recording', 'Multiple looks', 'Scripts written for you', 'Fully edited', 'You approve everything'].map((s, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-              <span aria-hidden style={{ width: 5, height: 5, borderRadius: 999, background: T.rouge }} />{s}
+              <span aria-hidden style={{ width: 5, height: 5, borderRadius: RA.pill, background: T.rouge }} />{s}
             </span>
           ))}
         </div>
       </div>
 
       {/* ── PROBLEM ────────────────────────────────────────────────────────── */}
-      <section style={{ padding: 'clamp(58px, 8vw, 84px) 20px' }}>
+      <section style={{ padding: `${PAD.normal} 20px` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <Reveal>
-            <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.rouge, marginBottom: 16 }}>Why it never happens</p>
-            <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, letterSpacing: '-0.015em', color: T.paper, maxWidth: 720, margin: 0 }}>
+            <Eyebrow tone="process">Why it never happens</Eyebrow>
+            <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, letterSpacing: '-0.015em', color: T.paper, maxWidth: 720, margin: 0 }}>
               You already know video works. That was never the problem.
             </h2>
           </Reveal>
 
-          <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginTop: 34 }}>
+          <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginTop: SP.xl }}>
             {PROBLEMS.map((p, i) => (
               <Reveal key={i} delay={i * 70}>
-                <div className="av-card" style={{ height: '100%', background: `linear-gradient(180deg, ${T.surface} 0%, ${T.ink} 100%)`, border: `1px solid rgba(240,233,223,.10)`, borderRadius: 22, padding: '28px 24px' }}>
-                  <div style={{ color: T.rouge, marginBottom: 16 }}>{p.icon}</div>
-                  <h3 style={{ fontSize: 19, fontWeight: 600, color: T.paper, margin: '0 0 10px' }}>{p.title}</h3>
-                  <p style={{ fontSize: 15.5, lineHeight: 1.65, color: T.muted, margin: 0 }}>{p.body}</p>
+                <div className="av-card" style={{ ...card(), padding: '28px 24px' }}>
+                  <div style={{ color: T.rouge, marginBottom: SP.md }}>{p.icon}</div>
+                  <h3 style={{ fontSize: FS.md, fontWeight: 600, color: T.paper, margin: `0 0 ${SP.sm}px` }}>{p.title}</h3>
+                  <p style={{ fontSize: FS.sm, lineHeight: 1.65, color: T.muted, margin: 0 }}>{p.body}</p>
                 </div>
               </Reveal>
             ))}
@@ -435,16 +859,16 @@ This video is AI, made from one 15-minute recording
       </section>
 
       {/* ── PROOF ──────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 20px clamp(58px, 8vw, 84px)' }}>
+      <section style={{ padding: `0 20px ${PAD.normal}` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div className="split" style={{ background: `linear-gradient(150deg, rgba(217,79,61,.14), rgba(28,18,8,0) 55%), ${T.ink}`, border: `1px solid rgba(240,233,223,.10)`, borderRadius: 30, padding: 'clamp(28px, 5vw, 56px)' }}>
+          <div className="split av-grain" style={{ background: `linear-gradient(150deg, rgba(217,79,61,.14), rgba(28,18,8,0) 55%), ${T.ink}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,.07), 0 30px 70px rgba(0,0,0,.28)`, borderRadius: RA.lg, padding: 'clamp(28px, 5vw, 56px)' }}>
             <div className="split-copy">
             <Reveal>
-              <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.turmeric, marginBottom: 16 }}>Don&rsquo;t take my word for it</p>
-              <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(30px, 5vw, 48px)', lineHeight: 1.12, color: T.paper, margin: '0 0 18px', maxWidth: 620 }}>
+              <Eyebrow tone="proof">Don&rsquo;t take my word for it</Eyebrow>
+              <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(30px, 5vw, 48px)', lineHeight: 1.12, color: T.paper, margin: `0 0 ${SP.md}px`, maxWidth: 620 }}>
                 &ldquo;But AI videos look fake.&rdquo;
               </h2>
-              <p style={{ fontSize: 17, lineHeight: 1.65, color: T.muted, maxWidth: 560, margin: 0 }}>
+              <p style={{ fontSize: FS.base, lineHeight: 1.65, color: T.muted, maxWidth: 560, margin: 0 }}>
                 Mostly true, of raw output. So here is the raw render on the left and what I deliver on the right. Same recording, same script, nothing re-shot. Turn the sound on, because half the difference is audio.
               </p>
             </Reveal>
@@ -456,59 +880,64 @@ This video is AI, made from one 15-minute recording
                 poster="/images/ai-video/d2-poster.webp"
                 controls playsInline preload="none"
                 aria-label="Split screen comparing the raw AI render with the finished, edited video"
-                style={{ display: 'block', borderRadius: 20, background: T.ink, border: `1px solid rgba(240,233,223,.12)` }}
+                style={{ display: 'block', borderRadius: 20, background: T.ink, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.12)` }}
               />
             </Reveal>
           </div>
         </div>
       </section>
 
-      {/* ── THE WALL — two auto-scrolling rows of real delivered work ──────── */}
-      <section style={{ padding: '0 0 clamp(58px, 8vw, 88px)' }} aria-labelledby="wall-h">
+      {/* ── THE WALL — the strongest asset on the page, now sized like it ──── */}
+      <section style={{ padding: `0 0 ${PAD.normal}` }} aria-labelledby="wall-h">
         <div style={{ maxWidth: 1120, margin: '0 auto', padding: '0 20px' }}>
           <Reveal>
-            <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.turmeric, marginBottom: 14 }}>The output</p>
-            <h2 id="wall-h" style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(30px, 5vw, 48px)', lineHeight: 1.1, color: T.paper, margin: '0 0 12px', maxWidth: 640 }}>
+            <Eyebrow tone="proof">The output</Eyebrow>
+            {/* The one deliberately oversized statement on the page. Previously
+                every h2 was clamp(30–52) and nothing was the anchor moment. */}
+            <h2 id="wall-h" style={{ fontFamily: SERIF, fontSize: 'clamp(38px, 7.4vw, 76px)', lineHeight: 1.04, letterSpacing: '-0.022em', color: T.paper, margin: `0 0 ${SP.md}px`, maxWidth: 860 }}>
               This is what a month looks like.
             </h2>
-            <p style={{ fontSize: 16, lineHeight: 1.6, color: T.muted, margin: '0 0 30px', maxWidth: 540 }}>
-              All of this is real client work. Tap any one to watch it. Every video here came out of a single recording session with that person.
+            <p style={{ fontSize: FS.base, lineHeight: 1.6, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 540 }}>
+              All of this is real client work. Drag or scroll the strip, then tap any one to watch it. Every video here came out of a single recording session with that person.
             </p>
           </Reveal>
         </div>
 
-        {[0, 1].map((row) => (
-          <div key={row} className="mq" style={{ marginBottom: row === 0 ? 14 : 0 }}>
-            <div className="mq-track" data-dir={row === 1 ? 'rev' : 'fwd'}>
-              {[...LIBRARY.slice(row * 7, row * 7 + 7), ...LIBRARY.slice(row * 7, row * 7 + 7)].map((item, i) => (
-                <button
-                  key={`${item.s}-${i}`}
-                  onClick={() => setPlaying(item)}
-                  aria-label={`Play: ${item.c} — ${item.t}`}
-                  className="mq-tile"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={item.p} alt="" width={360} height={640} loading="lazy" decoding="async" />
-                  <span className="mq-play" aria-hidden>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-                  </span>
-                  <span className="mq-meta">
-                    <span style={{ color: T.turmeric, fontSize: 10.5, letterSpacing: '.14em', textTransform: 'uppercase', display: 'block' }}>{item.c}</span>
-                    <span style={{ color: T.paper, fontSize: 13.5, lineHeight: 1.3, display: 'block', marginTop: 2 }}>{item.t}</span>
-                  </span>
-                </button>
+        <div className="mq-wrap" onMouseEnter={rail.pause} onMouseLeave={rail.resume} onFocus={rail.pause} onBlur={rail.resume}>
+          <div
+            ref={rail.ref}
+            className="mq"
+            data-drag={rail.dragging ? 'true' : 'false'}
+            role="group"
+            aria-label="Delivered videos — scroll or drag to browse"
+            onPointerDown={rail.onPointerDown}
+            onPointerMove={rail.onPointerMove}
+            onPointerUp={rail.endDrag}
+            onPointerCancel={rail.endDrag}
+            onPointerLeave={rail.endDrag}
+          >
+            <div className="mq-track">
+              {[...WALL_MARQUEE, ...WALL_MARQUEE].map((item, i) => (
+                <Tile key={`mq-${item.s}-${i}`} item={item} k={`mq-${item.s}-${i}`} />
               ))}
             </div>
           </div>
-        ))}
+
+          <button type="button" className="mq-nav mq-nav--prev" onClick={() => rail.nudge(-1)} aria-label="Scroll the videos left">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+          </button>
+          <button type="button" className="mq-nav mq-nav--next" onClick={() => rail.nudge(1)} aria-label="Scroll the videos right">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
+          </button>
+        </div>
       </section>
 
       {/* ── HOW ────────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 20px clamp(58px, 8vw, 88px)' }}>
+      <section style={{ padding: `0 20px ${PAD.normal}` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <Reveal>
-            <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.rouge, marginBottom: 16 }}>How it works</p>
-            <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: '0 0 34px', maxWidth: 640 }}>
+            <Eyebrow tone="process">How it works</Eyebrow>
+            <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.xl}px`, maxWidth: 640 }}>
               Fifteen minutes of your time. Once.
             </h2>
           </Reveal>
@@ -516,10 +945,10 @@ This video is AI, made from one 15-minute recording
             {STEPS.map((s, i) => (
               <Reveal key={i} delay={i * 90}>
                 <div style={{ position: 'relative', paddingTop: 30 }}>
-                  <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: `linear-gradient(90deg, ${T.rouge}, rgba(217,79,61,0))` }} />
-                  <span style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 44, color: 'rgba(240,233,223,.16)', lineHeight: 1 }}>{s.n}</span>
-                  <h3 style={{ fontSize: 22, fontWeight: 600, color: T.paper, margin: '14px 0 10px' }}>{s.t}</h3>
-                  <p style={{ fontSize: 15.5, lineHeight: 1.68, color: T.muted, margin: 0 }}>{s.d}</p>
+                  <div aria-hidden className="rail" style={{ position: 'absolute', top: 0, left: 0, right: 0 }} />
+                  <span style={{ fontFamily: SERIF, fontSize: FS.xl, color: 'rgba(240,233,223,.16)', lineHeight: 1 }}>{s.n}</span>
+                  <h3 style={{ fontSize: FS.md, fontWeight: 600, color: T.paper, margin: `14px 0 ${SP.sm}px` }}>{s.t}</h3>
+                  <p style={{ fontSize: FS.sm, lineHeight: 1.68, color: T.muted, margin: 0 }}>{s.d}</p>
                 </div>
               </Reveal>
             ))}
@@ -528,34 +957,49 @@ This video is AI, made from one 15-minute recording
       </section>
 
       {/* ── PRICING ────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 20px clamp(58px, 8vw, 88px)' }}>
+      <section style={{ padding: `0 20px ${PAD.normal}` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <Reveal>
-            <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.rouge, marginBottom: 16 }}>What it costs</p>
-            <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: '0 0 12px' }}>
+            <Eyebrow tone="process">What it costs</Eyebrow>
+            <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.sm}px` }}>
               No setup fee. No lock-in.
             </h2>
-            <p style={{ fontSize: 16.5, color: T.muted, margin: '0 0 32px', maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back.</p>
+            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back.</p>
           </Reveal>
           <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', alignItems: 'stretch' }}>
             {TIERS.map((t, i) => (
               <Reveal key={i} delay={i * 80}>
-                <div style={{
-                  height: '100%', display: 'flex', flexDirection: 'column',
-                  background: t.hot ? `linear-gradient(180deg, rgba(217,79,61,.16), ${T.ink} 58%)` : `linear-gradient(180deg, ${T.surface} 0%, ${T.ink} 100%)`,
-                  border: `1px solid ${t.hot ? 'rgba(217,79,61,.55)' : 'rgba(240,233,223,.10)'}`,
-                  borderRadius: 26, padding: '32px 26px',
-                  boxShadow: t.hot ? '0 24px 60px rgba(217,79,61,.16)' : 'none',
+                <div className="av-card" style={{
+                  ...card({ lit: t.hot, radius: RA.lg }),
+                  display: 'flex', flexDirection: 'column', padding: '32px 26px',
+                  /* The ₹5,000 tier is the strongest risk-reversal on the page and
+                     used to sit leftmost with the least emphasis, out-designed by
+                     the tier beside it. A sage edge gives it its own claim on the
+                     eye without competing with the rouge of the headline tier. */
+                  ...(t.risk ? { boxShadow: `inset 0 1px 0 rgba(92,122,95,.55), inset 0 0 0 1px rgba(92,122,95,.26), 0 18px 44px rgba(0,0,0,.26)` } : null),
                 }}>
                   {t.hot && (
-                    <span style={{ alignSelf: 'flex-start', fontSize: 11.5, letterSpacing: '.16em', textTransform: 'uppercase', color: T.ink, background: T.turmeric, borderRadius: 999, padding: '6px 13px', fontWeight: 700, marginBottom: 18 }}>Most take this</span>
+                    <span style={{ alignSelf: 'flex-start', fontSize: FS.xs - 1, letterSpacing: '.16em', textTransform: 'uppercase', color: T.ink, background: T.turmeric, borderRadius: RA.pill, padding: '6px 13px', fontWeight: 700, marginBottom: 18 }}>Most take this</span>
                   )}
-                  <p style={{ fontSize: 12.5, letterSpacing: '.16em', textTransform: 'uppercase', color: T.muted, margin: '0 0 12px' }}>{t.name}</p>
-                  <p style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 46, lineHeight: 1, color: T.paper, margin: 0 }}>{t.price}</p>
-                  <p style={{ fontSize: 14.5, color: T.dim, margin: '8px 0 22px' }}>{t.note}</p>
-                  <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 26px', display: 'grid', gap: 11, flex: 1 }}>
+                  {t.risk && (
+                    <span style={{ alignSelf: 'flex-start', fontSize: FS.xs - 1, letterSpacing: '.16em', textTransform: 'uppercase', color: T.sage, boxShadow: `inset 0 0 0 1px rgba(92,122,95,.5)`, borderRadius: RA.pill, padding: '6px 13px', fontWeight: 700, marginBottom: 18 }}>Start here, risk-free</span>
+                  )}
+                  <p style={{ fontSize: FS.xs, letterSpacing: '.16em', textTransform: 'uppercase', color: T.muted, margin: `0 0 ${SP.sm}px` }}>{t.name}</p>
+                  <p style={{ fontFamily: SERIF, fontSize: FS.xl + 8, lineHeight: 1, color: T.paper, margin: 0 }}>{t.price}</p>
+                  <p style={{ fontSize: FS.sm, color: T.dim, margin: `8px 0 ${t.was ? SP.sm : SP.lg}px` }}>{t.note}</p>
+                  {/* "First month ₹14,875" was a raw number in a bullet, doing no
+                      work. Shown against the struck standard price it reads as
+                      the concession it actually is. Both figures are true. */}
+                  {t.was && (
+                    <p style={{ fontSize: FS.sm, margin: `0 0 ${SP.lg}px`, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ color: T.dim, textDecoration: 'line-through' }}>{t.price}</span>
+                      <span style={{ color: T.turmeric, fontWeight: 600 }}>{t.was}</span>
+                      <span style={{ color: T.muted }}>{t.wasLabel}</span>
+                    </p>
+                  )}
+                  <ul style={{ listStyle: 'none', padding: 0, margin: `0 0 ${SP.lg}px`, display: 'grid', gap: 11, alignContent: 'start', flex: 1 }}>
                     {t.bullets.map((b, j) => (
-                      <li key={j} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', fontSize: 15.5, lineHeight: 1.5, color: T.dust }}>
+                      <li key={j} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', fontSize: FS.sm, lineHeight: 1.5, color: T.dust }}>
                         <span style={{ color: t.hot ? T.turmeric : T.sage, flexShrink: 0, marginTop: 3 }}>{Icon.check}</span>{b}
                       </li>
                     ))}
@@ -563,8 +1007,8 @@ This video is AI, made from one 15-minute recording
                   <a href="#start" className="av-btn" style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, minHeight: 44,
                     background: t.hot ? T.rouge : 'transparent', color: t.hot ? T.paper : T.dust,
-                    border: t.hot ? 'none' : `1px solid rgba(240,233,223,.24)`,
-                    textDecoration: 'none', padding: '14px 22px', borderRadius: 999, fontWeight: 600, fontSize: 15.5, cursor: 'pointer',
+                    boxShadow: t.hot ? 'inset 0 1px 0 rgba(255,255,255,.18)' : `inset 0 0 0 1px rgba(240,233,223,.24)`,
+                    textDecoration: 'none', padding: '14px 22px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer',
                   }}>Start here {Icon.arrow}</a>
                 </div>
               </Reveal>
@@ -573,46 +1017,67 @@ This video is AI, made from one 15-minute recording
         </div>
       </section>
 
-      {/* ── MANIFESTO ──────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 20px clamp(58px, 8vw, 88px)' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
-          <div className="av-grid" style={{ position: 'relative', border: `1px solid rgba(240,233,223,.12)`, borderRadius: 30, padding: 'clamp(30px, 5vw, 62px)', background: `radial-gradient(80% 60% at 12% 0%, rgba(92,122,95,.16), rgba(20,16,16,0) 62%), ${T.ink}`, overflow: 'hidden' }}>
-            <Reveal>
-              <p style={{ fontSize: 12.5, letterSpacing: '.18em', textTransform: 'uppercase', color: T.sage, marginBottom: 18 }}>The part most people leave out</p>
-              <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(28px, 4.6vw, 44px)', lineHeight: 1.16, color: T.paper, margin: '0 0 30px', maxWidth: 720 }}>
-                Here is what I will not do.
-              </h2>
-              <div style={{ display: 'grid', gap: 18, maxWidth: 760 }}>
-                {MANIFESTO.map((p, i) => (
-                  <p key={i} style={{ fontSize: 16.5, lineHeight: 1.72, color: i === 2 ? T.dust : T.muted, margin: 0, paddingLeft: 20, borderLeft: `2px solid ${i === 2 ? T.rouge : 'rgba(240,233,223,.14)'}` }}>{p}</p>
-                ))}
-              </div>
-            </Reveal>
-          </div>
+      {/* ── MANIFESTO — the cream inversion ────────────────────────────────────
+          The page ran #1C1208 → #141010 → #2A1F12 top to bottom: three values
+          inside one dark, never touching the cream half of the brand. Editorial
+          design punctuates with value, and this is the section that earns it —
+          the moral centre, set on paper so it reads as a printed statement
+          rather than another card in a stack of five. Full-bleed on purpose: the
+          inversion only works if the ground genuinely changes. */}
+      <section className="av-grain av-grain--paper" style={{ background: T.paper, color: T.ink, padding: `${PAD.wide} 20px`, marginBottom: PAD.normal }}>
+        <div style={{ maxWidth: 900, margin: '0 auto' }}>
+          <Reveal>
+            <Eyebrow tone="ethics" onPaper>The part most people leave out</Eyebrow>
+            <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.6vw, 60px)', lineHeight: 1.08, letterSpacing: '-0.02em', color: T.ink, margin: `0 0 ${SP.xl}px`, maxWidth: 720 }}>
+              Here is what I will not do.
+            </h2>
+            <div style={{ display: 'grid', gap: SP.lg, maxWidth: 760 }}>
+              {MANIFESTO.map((p, i) => (
+                <p key={i} style={{
+                  /* One pull-quote, set in italic serif at reading size. The
+                     third line is the load-bearing claim of the whole page. */
+                  fontFamily: i === 2 ? SERIF : undefined,
+                  fontStyle: i === 2 ? 'italic' : undefined,
+                  fontSize: i === 2 ? 'clamp(20px, 2.6vw, 26px)' : FS.base,
+                  lineHeight: i === 2 ? 1.5 : 1.72,
+                  color: i === 2 ? T.ink : T.inkMuted,
+                  margin: 0,
+                  paddingLeft: SP.lg,
+                  borderLeft: `2px solid ${i === 2 ? T.rouge : 'rgba(20,16,16,.14)'}`,
+                }}>{p}</p>
+              ))}
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ── FAQ ────────────────────────────────────────────────────────────── */}
-      <section style={{ padding: '0 20px clamp(58px, 8vw, 88px)' }}>
+      <section style={{ padding: `0 20px ${PAD.normal}` }}>
         <div style={{ maxWidth: 820, margin: '0 auto' }}>
           <Reveal>
-            <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(32px, 5.4vw, 48px)', lineHeight: 1.1, color: T.paper, margin: '0 0 28px' }}>Questions people actually ask</h2>
+            <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 48px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.xl}px` }}>Questions people actually ask</h2>
           </Reveal>
           <div style={{ display: 'grid', gap: 12 }}>
             {FAQS.map((f, i) => {
               const open = openFaq === i;
               return (
-                <div key={i} style={{ background: open ? T.surface : 'rgba(42,31,18,.5)', border: `1px solid ${open ? 'rgba(217,79,61,.36)' : 'rgba(240,233,223,.10)'}`, borderRadius: 18, overflow: 'hidden', transition: 'border-color .2s ease, background-color .2s ease' }}>
+                <div key={i} style={{
+                  background: open ? T.surface : 'rgba(42,31,18,.5)',
+                  boxShadow: open
+                    ? `inset 0 0 0 1px rgba(217,79,61,.36), 0 16px 40px rgba(0,0,0,.24)`
+                    : `inset 0 1px 0 rgba(255,255,255,.06)`,
+                  borderRadius: RA.sm + 4, overflow: 'hidden', transition: 'box-shadow .2s ease, background-color .2s ease',
+                }}>
                   <button
                     onClick={() => setOpenFaq(open ? null : i)}
                     aria-expanded={open}
-                    style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, textAlign: 'left', background: 'transparent', border: 'none', color: T.paper, padding: '20px 22px', fontSize: 16.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}
+                    style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, textAlign: 'left', background: 'transparent', border: 'none', color: T.paper, padding: '20px 22px', fontSize: FS.base, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}
                   >
                     {f.q}
                     <span aria-hidden style={{ color: T.rouge, flexShrink: 0, transform: open ? 'rotate(45deg)' : 'none', transition: 'transform .2s ease', fontSize: 24, lineHeight: 1 }}>+</span>
                   </button>
                   {open && (
-                    <p style={{ margin: 0, padding: '0 22px 22px', fontSize: 15.5, lineHeight: 1.7, color: T.muted }}>{f.a}</p>
+                    <p style={{ margin: 0, padding: '0 22px 22px', fontSize: FS.sm, lineHeight: 1.7, color: T.muted }}>{f.a}</p>
                   )}
                 </div>
               );
@@ -622,35 +1087,40 @@ This video is AI, made from one 15-minute recording
       </section>
 
       {/* ── FORM ───────────────────────────────────────────────────────────── */}
-      <section id="start" style={{ padding: '0 20px clamp(68px, 9vw, 100px)', scrollMarginTop: 20 }}>
+      <section id="start" style={{ padding: `0 20px ${PAD.wide}`, scrollMarginTop: 20 }}>
         <div style={{ maxWidth: 620, margin: '0 auto' }}>
-          <div style={{ background: `linear-gradient(170deg, rgba(217,79,61,.16), rgba(28,18,8,0) 46%), ${T.surface}`, border: `1px solid rgba(240,233,223,.14)`, borderRadius: 30, padding: 'clamp(28px, 5vw, 46px)' }}>
+          <div className="av-grain" style={{ background: `linear-gradient(170deg, rgba(217,79,61,.16), rgba(28,18,8,0) 46%), ${T.surface}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,.09), 0 34px 80px rgba(0,0,0,.34)`, borderRadius: RA.lg, padding: 'clamp(28px, 5vw, 46px)' }}>
             {sent ? (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ color: T.sage, marginBottom: 16, display: 'flex', justifyContent: 'center' }}>{Icon.check}</div>
-                <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 32, color: T.paper, margin: '0 0 12px' }}>Got it.</h2>
-                <p style={{ fontSize: 16.5, lineHeight: 1.65, color: T.muted, margin: '0 0 24px' }}>I&rsquo;ll message you personally, usually within a few hours, during working hours ({client.hours}).</p>
-                <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', border: `1px solid rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: 999, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Or message me now</a>
+                <div style={{ color: T.sage, marginBottom: SP.md, display: 'flex', justifyContent: 'center' }}>{Icon.check}</div>
+                <h2 style={{ fontFamily: SERIF, fontSize: FS.lg + 4, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Got it.</h2>
+                <p style={{ fontSize: FS.base, lineHeight: 1.65, color: T.muted, margin: `0 0 ${SP.lg}px` }}>I&rsquo;ll message you personally, usually within a few hours, during working hours ({client.hours}).</p>
+                <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Or message me now</a>
               </div>
             ) : (
               <>
-                <h2 style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 'clamp(28px, 4.4vw, 40px)', lineHeight: 1.14, color: T.paper, margin: '0 0 12px' }}>Tell me what you do.</h2>
-                <p style={{ fontSize: 16, lineHeight: 1.62, color: T.muted, margin: '0 0 28px' }}>Thirty minutes, free, no pitch deck. If it isn&rsquo;t a fit I&rsquo;ll say so on the call.</p>
-                <form onSubmit={submit} style={{ display: 'grid', gap: 16 }} noValidate>
+                <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 4.4vw, 40px)', lineHeight: 1.14, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Tell me what you do.</h2>
+                <p style={{ fontSize: FS.base, lineHeight: 1.62, color: T.muted, margin: `0 0 ${SP.lg}px` }}>Thirty minutes, free, no pitch deck. If it isn&rsquo;t a fit I&rsquo;ll say so on the call.</p>
+                {/* Only name and number are required now. Five mandatory fields on
+                    a cold page is a tax on every visitor, and the budget select
+                    in particular was asking someone to disqualify themselves
+                    before they were sold. The qualifying questions stay on the
+                    form — marked optional — rather than blocking the send. */}
+                <form onSubmit={submit} style={{ display: 'grid', gap: SP.md }} noValidate>
                   <Field label="Your name" htmlFor="f-name">
                     <input id="f-name" className="av-in" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Nair" style={inputStyle} />
                   </Field>
                   <Field label="WhatsApp number" htmlFor="f-phone">
                     <input id="f-phone" className="av-in" required inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile" style={inputStyle} />
                   </Field>
-                  <Field label="What do you do?" htmlFor="f-work">
+                  <Field label="What do you do?" htmlFor="f-work" optional>
                     <input id="f-work" className="av-in" value={work} onChange={(e) => setWork(e.target.value)} placeholder="e.g. career coach for mid-career switchers" style={inputStyle} />
                   </Field>
-                  <Field label="What's stopped you posting video so far?" htmlFor="f-blocker">
+                  <Field label="What's stopped you posting video so far?" htmlFor="f-blocker" optional>
                     <textarea id="f-blocker" className="av-in" rows={3} value={blocker} onChange={(e) => setBlocker(e.target.value)} placeholder="Be honest, this is the useful bit" style={{ ...inputStyle, resize: 'vertical' }} />
                   </Field>
-                  <Field label="Budget comfort" htmlFor="f-budget">
-                    <select id="f-budget" required value={budget} onChange={(e) => setBudget(e.target.value)} style={inputStyle}>
+                  <Field label="Budget comfort" htmlFor="f-budget" optional>
+                    <select id="f-budget" className="av-select" value={budget} onChange={(e) => setBudget(e.target.value)} style={inputStyle}>
                       <option value="">Choose one</option>
                       <option value="lt10">Under ₹10,000 a month</option>
                       <option value="10-20">₹10,000 – ₹20,000 a month</option>
@@ -658,9 +1128,9 @@ This video is AI, made from one 15-minute recording
                     </select>
                   </Field>
 
-                  {err && <p role="alert" style={{ color: T.rougeLit, fontSize: 14.5, margin: 0 }}>{err}</p>}
+                  {err && <p role="alert" style={{ color: T.rougeLit, fontSize: FS.sm, margin: 0 }}>{err}</p>}
 
-                  <button type="submit" disabled={sending} className="av-btn" style={{ minHeight: 52, background: sending ? T.dim : T.rouge, color: T.paper, border: 'none', borderRadius: 999, padding: '16px 28px', fontSize: 16.5, fontWeight: 600, fontFamily: 'inherit', cursor: sending ? 'wait' : 'pointer', marginTop: 4, boxShadow: sending ? 'none' : '0 16px 40px rgba(217,79,61,.26)' }}>
+                  <button type="submit" disabled={sending} className="av-btn" style={{ minHeight: 52, background: sending ? T.dim : T.rouge, color: T.paper, border: 'none', borderRadius: RA.pill, padding: '16px 28px', fontSize: FS.base, fontWeight: 600, fontFamily: 'inherit', cursor: sending ? 'wait' : 'pointer', marginTop: 4, boxShadow: sending ? 'none' : 'inset 0 1px 0 rgba(255,255,255,.18), 0 16px 40px rgba(217,79,61,.26)' }}>
                     {sending ? 'Sending…' : client.primaryCTA}
                   </button>
                 </form>
@@ -671,13 +1141,18 @@ This video is AI, made from one 15-minute recording
       </section>
 
       {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
-      <footer style={{ borderTop: `1px solid rgba(240,233,223,.09)`, padding: '34px 20px 108px', textAlign: 'center' }}>
-        <p style={{ fontFamily: 'var(--font-dmserif), Georgia, serif', fontSize: 24, color: T.paper, margin: '0 0 8px' }}>
+      <footer style={{ boxShadow: `inset 0 1px 0 rgba(240,233,223,.09)`, padding: '34px 20px 40px', textAlign: 'center' }}>
+        <p style={{ fontFamily: SERIF, fontSize: FS.lg - 4, color: T.paper, margin: `0 0 ${SP.xs}px` }}>
           ume<span style={{ color: T.rouge }}>vio</span>
         </p>
-        <p style={{ fontSize: 14.5, color: T.dim, margin: '0 0 6px' }}>{client.founder.name} · {client.address}</p>
-        <p style={{ fontSize: 14.5, color: T.dim, margin: 0 }}>{client.instagram} · {client.website}</p>
+        <p style={{ fontSize: FS.sm, color: T.dim, margin: '0 0 6px' }}>{client.founder.name} · {client.address}</p>
+        <p style={{ fontSize: FS.sm, color: T.dim, margin: 0 }}>{client.instagram} · {client.website}</p>
       </footer>
+
+      {/* Clears the fixed mobile bar. This used to be baked into the footer's
+          108px bottom padding, which left a dead band on desktop where the bar
+          is not shown at all. */}
+      <div className="av-tailpad" aria-hidden />
 
       {/* ── PLAYER ─────────────────────────────────────────────────────────── */}
       {playing && (
@@ -689,36 +1164,52 @@ This video is AI, made from one 15-minute recording
           <div onClick={(e) => e.stopPropagation()} className="player-box" style={{ width: '100%' }}>
             <video
               src={playing.v} controls autoPlay playsInline
-              style={{ width: '100%', display: 'block', borderRadius: 18, background: T.ink, border: `1px solid rgba(240,233,223,.14)` }}
+              style={{ width: '100%', display: 'block', borderRadius: RA.sm + 4, background: T.ink, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.14)` }}
             />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 14 }}>
-              <p style={{ margin: 0, fontSize: 14.5, color: T.muted }}>
+              <p style={{ margin: 0, fontSize: FS.sm, color: T.muted }}>
                 <span style={{ color: T.turmeric }}>{playing.c}</span> · {playing.t}
               </p>
-              <button onClick={() => setPlaying(null)} className="av-btn" style={{ minHeight: 44, minWidth: 44, padding: '10px 18px', borderRadius: 999, background: 'transparent', border: `1px solid rgba(240,233,223,.24)`, color: T.dust, fontSize: 14.5, fontFamily: 'inherit', cursor: 'pointer' }}>Close</button>
+              <button onClick={() => setPlaying(null)} className="av-btn" style={{ minHeight: 44, minWidth: 44, padding: '10px 18px', borderRadius: RA.pill, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, border: 'none', color: T.dust, fontSize: FS.sm, fontFamily: 'inherit', cursor: 'pointer' }}>Close</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── STICKY BAR (mobile) ────────────────────────────────────────────── */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 50, display: 'flex', gap: 10, padding: '12px 14px calc(12px + env(safe-area-inset-bottom))', background: 'rgba(20,16,16,.92)', backdropFilter: 'blur(12px)', borderTop: `1px solid rgba(240,233,223,.12)` }}>
-        <a href={`tel:${client.phone}`} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', border: `1px solid rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: 999, fontWeight: 600, fontSize: 15.5, cursor: 'pointer' }}>Call</a>
-        <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 2, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: 999, fontWeight: 600, fontSize: 15.5, cursor: 'pointer' }}>{Icon.whatsapp} {client.secondaryCTA}</a>
+      {/* ── FLOATING WHATSAPP (desktop) ────────────────────────────────────── */}
+      <a
+        href={wa}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="av-fab"
+        aria-label={`${client.secondaryCTA} — opens WhatsApp in a new tab`}
+      >
+        {Icon.whatsapp}
+        <span className="av-fab-label">{client.secondaryCTA}</span>
+      </a>
+
+      {/* ── STICKY BAR (mobile only) ───────────────────────────────────────── */}
+      <div className="av-sticky">
+        <a href={`tel:${client.phone}`} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>Call</a>
+        <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 2, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{Icon.whatsapp} {client.secondaryCTA}</a>
       </div>
     </main>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', minHeight: 48, background: 'rgba(20,16,16,.6)', border: '1px solid rgba(240,233,223,.16)',
-  borderRadius: 14, padding: '14px 16px', color: '#F0E9DF', fontSize: 16, fontFamily: 'inherit', outline: 'none',
+const inputStyle: CSSProperties = {
+  width: '100%', minHeight: 48, background: 'rgba(20,16,16,.6)',
+  border: 'none', boxShadow: 'inset 0 0 0 1px rgba(240,233,223,.16)',
+  borderRadius: RA.sm, padding: '14px 16px', color: T.dust, fontSize: 16, fontFamily: 'inherit', outline: 'none',
 };
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+function Field({ label, htmlFor, optional = false, children }: { label: string; htmlFor: string; optional?: boolean; children: ReactNode }) {
   return (
     <div>
-      <label htmlFor={htmlFor} style={{ display: 'block', fontSize: 13.5, letterSpacing: '.08em', textTransform: 'uppercase', color: '#A89880', marginBottom: 8 }}>{label}</label>
+      <label htmlFor={htmlFor} style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: FS.xs, letterSpacing: '.08em', textTransform: 'uppercase', color: T.muted, marginBottom: 8 }}>
+        {label}
+        {optional && <span style={{ letterSpacing: '.06em', color: T.dim, textTransform: 'none' }}>optional</span>}
+      </label>
       {children}
     </div>
   );
