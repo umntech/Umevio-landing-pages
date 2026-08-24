@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, memo, type CSSProperties, type ReactNode } from 'react';
 import { client } from '@/lib/client.config';
 
 /**
@@ -172,7 +172,11 @@ function useRail() {
      keep adding scrollLeft while a finger is mid-swipe and all through the
      momentum afterwards, i.e. the strip would fight the user on every phone. */
   const idleUntil = useRef(0);
-  const [dragging, setDragging] = useState(false);
+  /* The grab cursor is toggled straight on the node rather than through React
+     state. Re-rendering the page on pointerdown is both wasteful and, before
+     Tile was hoisted, actively broke clicking — there is no reason for a cursor
+     change to go through the render tree at all. */
+  const setDragAttr = (v: boolean) => { ref.current?.setAttribute('data-drag', v ? 'true' : 'false'); };
 
   /* Consulted by the tile's click handler: a drag that ends over a tile must not
      also open that tile's video. */
@@ -254,7 +258,7 @@ function useRail() {
     if (!el) return;
     drag.current = { active: true, startX: e.clientX, startLeft: el.scrollLeft, moved: false };
     movedRef.current = false;
-    setDragging(true);
+    setDragAttr(true);
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -268,7 +272,7 @@ function useRail() {
   const endDrag = () => {
     if (!drag.current.active) return;
     drag.current.active = false;
-    setDragging(false);
+    setDragAttr(false);
     /* Cleared on the next frame so the click that follows this pointerup can
        still see that a drag happened. */
     requestAnimationFrame(() => { movedRef.current = false; });
@@ -284,7 +288,7 @@ function useRail() {
   };
 
   return {
-    ref, dragging, movedRef, nudge, endDrag,
+    ref, movedRef, nudge, endDrag,
     onPointerDown, onPointerMove,
     pause: () => { paused.current = true; },
     resume: () => { paused.current = false; },
@@ -614,6 +618,62 @@ const CSS = `
         @media (min-width: 768px) { .av-tailpad { height: 0; } }
       `;
 
+/**
+ * One tile, shared by every position in the rail.
+ *
+ * Defined at module scope on purpose. It previously lived inside
+ * AiVideoLanding, which gave it a fresh component identity on every parent
+ * render — so React tore down and rebuilt every tile's DOM node whenever any
+ * state changed. Pressing the mouse fired setDragging, which re-rendered the
+ * parent, which replaced the node mid-click: mousedown landed on one element
+ * and mouseup on its replacement, and a click event only fires when both hit
+ * the same element. The result was that tiles could never be opened with a
+ * mouse, while touch was fine because the drag handlers ignore touch entirely.
+ */
+const Tile = memo(function Tile({
+  item, k, active, canHover, onOpen, onHover, onLeave,
+}: {
+  item: (typeof LIBRARY)[number];
+  k: string;
+  active: boolean;
+  canHover: boolean;
+  onOpen: (item: (typeof LIBRARY)[number]) => void;
+  onHover: (k: string) => void;
+  onLeave: (k: string) => void;
+}) {
+  return (
+    <button
+      onClick={() => onOpen(item)}
+      onMouseEnter={() => { if (canHover) onHover(k); }}
+      onMouseLeave={() => onLeave(k)}
+      onFocus={() => { if (canHover) onHover(k); }}
+      onBlur={() => onLeave(k)}
+      aria-label={`Play: ${item.c} — ${item.t}`}
+      className="mq-tile"
+      data-preview={active ? 'true' : 'false'}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={item.p} alt="" width={360} height={640} loading="lazy" decoding="async" />
+      {/* Muted, looping, preload="none": nothing is fetched until a pointer
+          actually lands on the tile, and only one tile is ever mounted at a
+          time, so the wall costs no bandwidth until someone is interested.
+          Muted is not a choice — browsers refuse to autoplay audio without a
+          gesture, so a hover preview can only ever be silent. Sound arrives
+          when the tile is opened, which is a real click. */}
+      {active && (
+        <video src={item.v} muted loop autoPlay playsInline preload="none" aria-hidden tabIndex={-1} />
+      )}
+      <span className="mq-play" aria-hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+      </span>
+      <span className="mq-meta">
+        <span style={{ color: T.turmeric, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', display: 'block' }}>{item.c}</span>
+        <span style={{ color: T.paper, fontSize: FS.sm - 1, lineHeight: 1.3, display: 'block', marginTop: 2 }}>{item.t}</span>
+      </span>
+    </button>
+  );
+});
+
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 
 export default function AiVideoLanding() {
@@ -623,6 +683,15 @@ export default function AiVideoLanding() {
   const [preview, setPreview] = useState<string | null>(null);
   const [canHover, setCanHover] = useState(false);
   const rail = useRail();
+
+  /* Stable identities, so the memoised tiles are not invalidated on every
+     parent render. openTile still honours the drag guard: a drag that happens
+     to finish over a tile must not also open that tile. */
+  const openTile = useCallback((item: (typeof LIBRARY)[number]) => {
+    if (!rail.movedRef.current) setPlaying(item);
+  }, [rail.movedRef]);
+  const hoverTile = useCallback((k: string) => setPreview(k), []);
+  const leaveTile = useCallback((k: string) => setPreview((p) => (p === k ? null : p)), []);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [work, setWork] = useState('');
@@ -688,39 +757,6 @@ export default function AiVideoLanding() {
     } finally {
       setSending(false);
     }
-  }
-
-  /* One tile renderer, shared by the marquee and the grid. */
-  function Tile({ item, k }: { item: (typeof LIBRARY)[number]; k: string }) {
-    const on = canHover && preview === k;
-    return (
-      <button
-        onClick={() => { if (!rail.movedRef.current) setPlaying(item); }}
-        onMouseEnter={() => { if (canHover) setPreview(k); }}
-        onMouseLeave={() => setPreview((p) => (p === k ? null : p))}
-        onFocus={() => { if (canHover) setPreview(k); }}
-        onBlur={() => setPreview((p) => (p === k ? null : p))}
-        aria-label={`Play: ${item.c} — ${item.t}`}
-        className="mq-tile"
-        data-preview={on ? 'true' : 'false'}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={item.p} alt="" width={360} height={640} loading="lazy" decoding="async" />
-        {/* Muted, looping, preload="none": nothing is fetched until a pointer
-            actually lands on the tile, and only one tile is ever mounted at a
-            time, so the wall costs no bandwidth until someone is interested. */}
-        {on && (
-          <video src={item.v} muted loop autoPlay playsInline preload="none" aria-hidden tabIndex={-1} />
-        )}
-        <span className="mq-play" aria-hidden>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-        </span>
-        <span className="mq-meta">
-          <span style={{ color: T.turmeric, fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', display: 'block' }}>{item.c}</span>
-          <span style={{ color: T.paper, fontSize: FS.sm - 1, lineHeight: 1.3, display: 'block', marginTop: 2 }}>{item.t}</span>
-        </span>
-      </button>
-    );
   }
 
   return (
@@ -907,7 +943,7 @@ export default function AiVideoLanding() {
           <div
             ref={rail.ref}
             className="mq"
-            data-drag={rail.dragging ? 'true' : 'false'}
+            data-drag="false"
             role="group"
             aria-label="Delivered videos — scroll or drag to browse"
             onPointerDown={rail.onPointerDown}
@@ -917,9 +953,17 @@ export default function AiVideoLanding() {
             onPointerLeave={rail.endDrag}
           >
             <div className="mq-track">
-              {[...WALL_MARQUEE, ...WALL_MARQUEE].map((item, i) => (
-                <Tile key={`mq-${item.s}-${i}`} item={item} k={`mq-${item.s}-${i}`} />
-              ))}
+              {[...WALL_MARQUEE, ...WALL_MARQUEE].map((item, i) => {
+                const k = `mq-${item.s}-${i}`;
+                return (
+                  <Tile
+                    key={k} item={item} k={k}
+                    active={canHover && preview === k}
+                    canHover={canHover}
+                    onOpen={openTile} onHover={hoverTile} onLeave={leaveTile}
+                  />
+                );
+              })}
             </div>
           </div>
 
