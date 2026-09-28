@@ -30,7 +30,7 @@ const p: CSSProperties = { fontSize: 16, lineHeight: 1.7, color: C.dust, margin:
 const li: CSSProperties = { fontSize: 16, lineHeight: 1.7, color: C.dust, margin: '0 0 8px' };
 
 function List({ items }: { items: ReactNode[] }) {
-  return <ul style={{ paddingLeft: 20, margin: '0 0 12px' }}>{items.map((x, i) => <li key={i} style={li}>{x}</li>)}</ul>;
+  return <ul style={{ listStyle: 'disc', paddingLeft: 22, margin: '0 0 12px' }}>{items.map((x, i) => <li key={i} style={li}>{x}</li>)}</ul>;
 }
 
 export default function PrivacyPage() {
