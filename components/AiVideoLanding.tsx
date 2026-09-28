@@ -1291,6 +1291,9 @@ export default function AiVideoLanding() {
         </p>
         <p style={{ fontSize: FS.sm, color: T.dim, margin: '0 0 6px' }}>{client.founder.name} · {client.address}</p>
         <p style={{ fontSize: FS.sm, color: T.dim, margin: 0 }}>{client.instagram} · {client.website}</p>
+        <p style={{ fontSize: FS.sm, margin: `${SP.sm}px 0 0` }}>
+          <a href="/ai-video/privacy" style={{ color: T.muted, textDecoration: 'underline', textUnderlineOffset: 3 }}>Privacy policy</a>
+        </p>
       </footer>
 
       {/* Clears the fixed mobile bar. This used to be baked into the footer's
