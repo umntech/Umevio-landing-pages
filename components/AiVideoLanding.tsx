@@ -749,8 +749,23 @@ export default function AiVideoLanding() {
       if (!res.ok) throw new Error(`formspree ${res.status}`);
       if (typeof window !== 'undefined') {
         const w = window as unknown as { fbq?: (...a: unknown[]) => void; dataLayer?: unknown[] };
-        w.fbq?.('track', 'Lead');
-        w.dataLayer?.push({ event: 'generate_lead', form: 'ai-video' });
+        /* The pixel and the server send the same Lead under one event_id, so Meta
+           counts it once but still gets it when an ad blocker or iOS eats the
+           pixel. The phone goes to our own /api/capi and is hashed there; only the
+           hash reaches Meta. Fire-and-forget: tracking must never block the lead. */
+        const eventId = crypto.randomUUID();
+        const cookie = (k: string) => document.cookie.match(new RegExp(`(?:^|; )${k}=([^;]*)`))?.[1];
+        w.fbq?.('track', 'Lead', {}, { eventID: eventId });
+        fetch('/api/capi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          keepalive: true,
+          body: JSON.stringify({
+            event_name: 'Lead', event_id: eventId, page_url: window.location.href,
+            phone, name, fbp: cookie('_fbp'), fbc: cookie('_fbc'),
+          }),
+        }).catch(() => {});
+        w.dataLayer?.push({ event: 'generate_lead', form: 'ai-video', event_id: eventId });
       }
       setSent(true);
     } catch {
