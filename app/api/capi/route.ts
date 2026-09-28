@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { client } from '@/lib/client.config';
 
 export async function POST(req: NextRequest) {
-  const token = process.env.META_CAPI_TOKEN;
+  /* trim(): a token pasted or piped into Vercel can carry a trailing newline,
+     which Meta rejects as "Cannot parse access token" (seen 2026-09-28). */
+  const token = process.env.META_CAPI_TOKEN?.trim();
   if (!token) {
     return NextResponse.json({ error: 'META_CAPI_TOKEN not set' }, { status: 500 });
   }
