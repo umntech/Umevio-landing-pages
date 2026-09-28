@@ -704,6 +704,32 @@ export default function AiVideoLanding() {
 
   const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
 
+  /* The pixel and the server send the same event under one event_id, so Meta
+     counts it once but still gets it when an ad blocker or iOS eats the pixel.
+     Phone and name go to our own /api/capi and are hashed there; only the hash
+     reaches Meta. Fire-and-forget: tracking must never block a lead or a tap. */
+  function track(event: 'Lead' | 'Contact', match: { phone?: string; name?: string }, gtm: Record<string, string>) {
+    if (typeof window === 'undefined') return;
+    const w = window as unknown as { fbq?: (...a: unknown[]) => void; dataLayer?: unknown[] };
+    const eventId = crypto.randomUUID();
+    const cookie = (k: string) => document.cookie.match(new RegExp(`(?:^|; )${k}=([^;]*)`))?.[1];
+    w.fbq?.('track', event, {}, { eventID: eventId });
+    fetch('/api/capi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        event_name: event, event_id: eventId, page_url: window.location.href,
+        ...match, fbp: cookie('_fbp'), fbc: cookie('_fbc'),
+      }),
+    }).catch(() => {});
+    w.dataLayer?.push({ ...gtm, event_id: eventId });
+  }
+  /* WhatsApp and Call are enquiries too; without these the ads would look
+     like they produced nothing whenever someone chose to message instead. */
+  const onWa = () => track('Contact', {}, { event: 'contact', channel: 'whatsapp' });
+  const onCall = () => track('Contact', {}, { event: 'contact', channel: 'call' });
+
   /* Hover-to-preview is a pointer affordance. On touch it would fire on tap and
      fight the tap-to-open-player behaviour, so it is gated on a real hover
      device and on the visitor not having asked for reduced motion. */
@@ -747,26 +773,7 @@ export default function AiVideoLanding() {
         }),
       });
       if (!res.ok) throw new Error(`formspree ${res.status}`);
-      if (typeof window !== 'undefined') {
-        const w = window as unknown as { fbq?: (...a: unknown[]) => void; dataLayer?: unknown[] };
-        /* The pixel and the server send the same Lead under one event_id, so Meta
-           counts it once but still gets it when an ad blocker or iOS eats the
-           pixel. The phone goes to our own /api/capi and is hashed there; only the
-           hash reaches Meta. Fire-and-forget: tracking must never block the lead. */
-        const eventId = crypto.randomUUID();
-        const cookie = (k: string) => document.cookie.match(new RegExp(`(?:^|; )${k}=([^;]*)`))?.[1];
-        w.fbq?.('track', 'Lead', {}, { eventID: eventId });
-        fetch('/api/capi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          keepalive: true,
-          body: JSON.stringify({
-            event_name: 'Lead', event_id: eventId, page_url: window.location.href,
-            phone, name, fbp: cookie('_fbp'), fbc: cookie('_fbc'),
-          }),
-        }).catch(() => {});
-        w.dataLayer?.push({ event: 'generate_lead', form: 'ai-video', event_id: eventId });
-      }
+      track('Lead', { phone, name }, { event: 'generate_lead', form: 'ai-video' });
       setSent(true);
     } catch {
       setErr('That did not send. WhatsApp me instead, that always works.');
@@ -823,7 +830,7 @@ export default function AiVideoLanding() {
               <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
                 {client.primaryCTA} {Icon.arrow}
               </a>
-              <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '17px 26px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.base, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
+              <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '17px 26px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.base, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
                 {Icon.whatsapp} WhatsApp
               </a>
             </div>
@@ -1024,7 +1031,7 @@ export default function AiVideoLanding() {
             <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.sm}px` }}>
               No setup fee. No lock-in.
             </h2>
-            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Prices plus GST. Billed monthly in advance. Cancel any month and I hand your recording back.</p>
+            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back.</p>
           </Reveal>
           <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', alignItems: 'stretch' }}>
             {TIERS.map((t, i) => (
@@ -1155,7 +1162,7 @@ export default function AiVideoLanding() {
                 <div style={{ color: T.sage, marginBottom: SP.md, display: 'flex', justifyContent: 'center' }}>{Icon.check}</div>
                 <h2 style={{ fontFamily: SERIF, fontSize: FS.lg + 4, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Got it.</h2>
                 <p style={{ fontSize: FS.base, lineHeight: 1.65, color: T.muted, margin: `0 0 ${SP.lg}px` }}>I&rsquo;ll message you personally, usually within a few hours, during working hours ({client.hours}).</p>
-                <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Or message me now</a>
+                <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Or message me now</a>
               </div>
             ) : (
               <>
@@ -1239,6 +1246,7 @@ export default function AiVideoLanding() {
       {/* ── FLOATING WHATSAPP (desktop) ────────────────────────────────────── */}
       <a
         href={wa}
+        onClick={onWa}
         target="_blank"
         rel="noopener noreferrer"
         className="av-fab"
@@ -1250,8 +1258,8 @@ export default function AiVideoLanding() {
 
       {/* ── STICKY BAR (mobile only) ───────────────────────────────────────── */}
       <div className="av-sticky">
-        <a href={`tel:${client.phone}`} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>Call</a>
-        <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 2, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{Icon.whatsapp} {client.secondaryCTA}</a>
+        <a href={`tel:${client.phone}`} onClick={onCall} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>Call</a>
+        <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 2, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{Icon.whatsapp} {client.secondaryCTA}</a>
       </div>
     </main>
   );
