@@ -741,8 +741,14 @@ export default function AiVideoLanding() {
      reaches Meta. Fire-and-forget: tracking must never block a lead or a tap. */
   function track(event: 'Lead' | 'Contact', match: { phone?: string; name?: string }, gtm: Record<string, string>) {
     if (typeof window === 'undefined') return;
-    const w = window as unknown as { fbq?: (...a: unknown[]) => void; dataLayer?: unknown[] };
+    const w = window as unknown as { fbq?: (...a: unknown[]) => void; gtag?: (...a: unknown[]) => void; dataLayer?: unknown[] };
     const eventId = crypto.randomUUID();
+    /* GA4 runs on plain gtag.js with no GTM container, and gtag ignores
+       dataLayer objects like { event: 'generate_lead' } (only GTM reads those),
+       so leads never reached GA4. Send them as real gtag events. No personal
+       data goes to GA4. */
+    w.gtag?.('event', event === 'Lead' ? 'generate_lead' : 'contact',
+      event === 'Lead' ? { form: 'ai-video', plan: plan || 'not chosen' } : { method: gtm.channel });
     const cookie = (k: string) => document.cookie.match(new RegExp(`(?:^|; )${k}=([^;]*)`))?.[1];
     w.fbq?.('track', event, {}, { eventID: eventId });
     fetch('/api/capi', {
