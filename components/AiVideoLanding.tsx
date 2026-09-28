@@ -717,6 +717,15 @@ export default function AiVideoLanding() {
     const keep: Record<string, string> = {};
     ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach((k) => { const v = q.get(k); if (v) keep[k] = v; });
     setUtm(keep);
+    /* fbc = Meta's click ID, which ties a lead to the exact ad click. The pixel
+       writes the _fbc cookie itself, but it loads lazily and some browsers block
+       it, so CAPI events often went without one (Events Manager flagged low fbc
+       coverage, 2026-09-28). Build it from ?fbclid= in Meta's documented format,
+       fb.1.<ms>.<fbclid>, only when the pixel has not already. */
+    const fbclid = q.get('fbclid');
+    if (fbclid && !/(?:^|; )_fbc=/.test(document.cookie)) {
+      document.cookie = `_fbc=fb.1.${Date.now()}.${fbclid}; max-age=${90 * 86400}; path=/; SameSite=Lax; Secure`;
+    }
     const form = document.getElementById('start');
     if (!form || !('IntersectionObserver' in window)) return;
     const io = new IntersectionObserver(([e]) => setFormInView(e.isIntersecting), { threshold: 0.05 });
