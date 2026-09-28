@@ -73,9 +73,9 @@ async function main() {
       markup: `<span foreground="#E2654F" letter_spacing="4600" size="20pt">AI VIDEO CONTENT ENGINE</span>`,
       font: SANS_MED,
     }),
-    layer({ markup: `<span foreground="#FAF6F0" size="92pt" style="normal" weight="400">Record once.</span>`, font: SERIF }),
+    layer({ markup: `<span foreground="#FAF6F0" size="92pt" style="normal" weight="400">Your own AI avatar.</span>`, font: SERIF }),
     layer({
-      markup: `<span foreground="#FAF6F0" size="92pt" style="normal" weight="400">Post <span foreground="#D94F3D">every day</span>.</span>`,
+      markup: `<span foreground="#FAF6F0" size="92pt" style="normal" weight="400">A reel <span foreground="#D94F3D">every week</span>.</span>`,
       font: SERIF,
     }),
     layer({

@@ -20,7 +20,7 @@ import AiVideoLanding from '@/components/AiVideoLanding';
 export const metadata: Metadata = {
   title: 'AI Video Content Engine — Umevio',
   description:
-    'Record once, post every day. Scripted, edited, honestly labelled AI video for coaches and founders who cannot keep filming. Built by the person who also runs the ads.',
+    'Your own AI avatar, a reel every week, without filming. Scripted, edited, honestly labelled AI video for doctors, coaches and founders who cannot keep filming. Built by the person who also runs the ads.',
   robots: { index: true, follow: true },
   /* The share card is built by scripts/build-og-image.cjs and committed to
      public/images/ai-video/og.png. It is NOT generated at request time: Next 14
@@ -28,18 +28,18 @@ export const metadata: Metadata = {
      Windows mangles, so the opengraph-image.tsx convention crashes `next build`
      on any Windows machine. Re-run the script if the headline or brand changes. */
   openGraph: {
-    title: 'Record once. Post every day. — Umevio',
+    title: 'Your own AI avatar. A reel every week. — Umevio',
     description:
-      'AI video for coaches and founders who cannot keep filming. Fifteen minutes of recording, once. Scripts written, videos edited, every one labelled.',
+      'AI video for doctors, coaches and founders who cannot keep filming. Fifteen minutes of recording, once. Scripts written, videos edited, every one labelled.',
     type: 'website',
     siteName: 'Umevio',
-    images: [{ url: '/images/ai-video/og.png', width: 1200, height: 630, alt: 'Umevio — Record once. Post every day.' }],
+    images: [{ url: '/images/ai-video/og.png', width: 1200, height: 630, alt: 'Umevio — Your own AI avatar. A reel every week.' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Record once. Post every day. — Umevio',
+    title: 'Your own AI avatar. A reel every week. — Umevio',
     description:
-      'AI video for coaches and founders who cannot keep filming. Fifteen minutes of recording, once.',
+      'AI video for doctors, coaches and founders who cannot keep filming. Fifteen minutes of recording, once.',
     images: ['/images/ai-video/og.png'],
   },
 };

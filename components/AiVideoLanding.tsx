@@ -402,7 +402,7 @@ const FAQS = [
    Client names appear with the founder's authorisation (2026-08-12); he owns those
    relationships and confirmed he would speak to them directly. */
 const LIBRARY = [
-  { s: 'd1', v: `${V}/d1-hero.mp4`, p: '/images/ai-video/d1-poster.webp', c: 'Umevio', t: 'Record once, post daily' },
+  { s: 'd1', v: `${V}/d1-hero.mp4`, p: '/images/ai-video/d1-poster.webp', c: 'Umevio', t: 'One recording, every reel' },
   { s: 'pro-cost', v: `${V}/pro-cost.mp4`, p: '/images/ai-video/library/pro-cost.webp', c: 'Proalign', t: 'What braces actually cost' },
   { s: 'mpi-secret', v: `${V}/mpi-secret.mp4`, p: '/images/ai-video/library/mpi-secret.webp', c: 'MPI Invest', t: 'A secret in investing' },
   { s: 'mpi-skills', v: `${V}/mpi-skills.mp4`, p: '/images/ai-video/library/mpi-skills.webp', c: 'MPI Invest', t: 'Skills over salary' },
@@ -613,7 +613,10 @@ const CSS = `
         .av-sticky { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; gap: 10px;
           padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
           background: rgba(20,16,16,.92); backdrop-filter: blur(12px);
-          box-shadow: inset 0 1px 0 rgba(240,233,223,.12); }
+          box-shadow: inset 0 1px 0 rgba(240,233,223,.12);
+          transition: transform .25s ease, opacity .25s ease; }
+        .av-sticky--away { transform: translateY(110%); opacity: 0; pointer-events: none; }
+        @media (prefers-reduced-motion: reduce) { .av-sticky { transition: none; } }
         @media (min-width: 768px) { .av-sticky { display: none; } }
         .av-tailpad { height: 108px; }
         @media (min-width: 768px) { .av-tailpad { height: 0; } }
@@ -701,6 +704,25 @@ export default function AiVideoLanding() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState('');
+  /* Which price card sent them to the form, and which ad sent them to the page.
+     Both ride along in the lead email so a booked call can be traced back. */
+  const [plan, setPlan] = useState('');
+  const [utm, setUtm] = useState<Record<string, string>>({});
+  /* The sticky bar steps aside once the form is on screen: it would otherwise
+     sit on top of the fields and the submit button, worst with the keyboard up. */
+  const [formInView, setFormInView] = useState(false);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const keep: Record<string, string> = {};
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach((k) => { const v = q.get(k); if (v) keep[k] = v; });
+    setUtm(keep);
+    const form = document.getElementById('start');
+    if (!form || !('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(([e]) => setFormInView(e.isIntersecting), { threshold: 0.05 });
+    io.observe(form);
+    return () => io.disconnect();
+  }, []);
 
   const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
 
@@ -768,6 +790,8 @@ export default function AiVideoLanding() {
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           name, phone, work, blocker, budget,
+          plan: plan || 'not chosen',
+          ...utm,
           source: '/ai-video',
           _subject: `AI video enquiry — ${name || 'no name'}`,
         }),
@@ -805,8 +829,10 @@ export default function AiVideoLanding() {
           </Reveal>
 
           <Reveal delay={60}>
+            {/* Was "Record once. Post every day." — a promise the 4-reels-a-month
+                plan does not keep. Now matches the ads' "your own AI avatar". */}
             <h1 style={{ fontFamily: SERIF, fontSize: 'clamp(46px, 9.4vw, 88px)', lineHeight: 1.0, letterSpacing: '-0.025em', margin: `${SP.lg}px 0 0`, color: T.paper, maxWidth: 900 }}>
-              Record once.<br />Post <span style={{ color: T.rouge }}>every day</span>.
+              Your own AI avatar.<br />A reel <span style={{ color: T.rouge }}>every week</span>.
             </h1>
           </Reveal>
 
@@ -815,7 +841,7 @@ export default function AiVideoLanding() {
               before this, every word of body copy was Outfit. */}
           <Reveal delay={120}>
             <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 'clamp(19px, 2.4vw, 25px)', lineHeight: 1.5, color: T.dust, margin: `${SP.lg}px 0 0`, maxWidth: 580 }}>
-              AI video for coaches and founders who can&rsquo;t keep filming.
+              For doctors, coaches and founders who can&rsquo;t keep filming.
             </p>
           </Reveal>
 
@@ -826,13 +852,21 @@ export default function AiVideoLanding() {
           </Reveal>
 
           <Reveal delay={200}>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, margin: `${SP.xl}px 0 0` }}>
-              <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
+            {/* The form is the conversion, so the booking button gets a row to
+                itself; WhatsApp and Call sit under it, quieter, for people who
+                would rather talk now. */}
+            <div style={{ display: 'grid', gap: 12, margin: `${SP.xl}px 0 0`, maxWidth: 420 }}>
+              <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
                 {client.primaryCTA} {Icon.arrow}
               </a>
-              <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '17px 26px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.base, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
-                {Icon.whatsapp} WhatsApp
-              </a>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '13px 18px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.sm, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
+                  {Icon.whatsapp} WhatsApp
+                </a>
+                <a href={`tel:${client.phone}`} onClick={onCall} className="av-btn" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', color: T.dust, textDecoration: 'none', padding: '13px 18px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.sm, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
+                  Call
+                </a>
+              </div>
             </div>
           </Reveal>
 
@@ -884,7 +918,7 @@ export default function AiVideoLanding() {
 
       {/* ── STRIP ──────────────────────────────────────────────────────────── */}
       <div style={{ boxShadow: `inset 0 1px 0 rgba(240,233,223,.09), inset 0 -1px 0 rgba(240,233,223,.09)`, background: 'rgba(20,16,16,.45)' }}>
-        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '20px', display: 'flex', flexWrap: 'wrap', gap: '10px 26px', justifyContent: 'center', fontSize: FS.xs, letterSpacing: '.1em', textTransform: 'uppercase', color: T.dim }}>
+        <div style={{ maxWidth: 1120, margin: '0 auto', padding: '20px', display: 'flex', flexWrap: 'wrap', gap: '10px 26px', justifyContent: 'center', fontSize: FS.xs, letterSpacing: '.1em', textTransform: 'uppercase', color: T.dust }}>
           {['One recording', 'Multiple looks', 'Scripts written for you', 'Fully edited', 'You approve everything'].map((s, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
               <span aria-hidden style={{ width: 5, height: 5, borderRadius: RA.pill, background: T.rouge }} />{s}
@@ -914,6 +948,18 @@ export default function AiVideoLanding() {
               </Reveal>
             ))}
           </div>
+
+          {/* Ad A02 ("Evenings Back") lands here promising that a DIY avatar tool
+              moves the work rather than removing it. This is where the page
+              answers it, instead of leaving it to one FAQ near the bottom. */}
+          <Reveal delay={120}>
+            <div style={{ marginTop: SP.xl, padding: '28px 24px', borderRadius: RA.lg, borderLeft: `3px solid ${T.rouge}`, background: 'rgba(217,79,61,.07)', boxShadow: 'inset 0 0 0 1px rgba(217,79,61,.18)' }}>
+              <h3 style={{ fontFamily: SERIF, fontSize: FS.lg, lineHeight: 1.2, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Already bought an AI avatar tool?</h3>
+              <p style={{ fontSize: FS.base, lineHeight: 1.65, color: T.muted, margin: 0, maxWidth: 680 }}>
+                The tool makes the face. It does not pick the topic, write a script that sounds like you, cut it, caption it, add music or post it. That work does not go away. It moves to your evenings. That work is the part I do.
+              </p>
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -997,6 +1043,14 @@ export default function AiVideoLanding() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6" /></svg>
           </button>
         </div>
+
+        {/* Mid-page ask, at the moment the proof has just landed. The form is
+            otherwise about seven phone screens below the hero. */}
+        <div style={{ textAlign: 'center', padding: `${SP.xl}px 20px 0` }}>
+          <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '16px 28px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 16px 40px rgba(217,79,61,.26)', cursor: 'pointer' }}>
+            Want this with your face? Book a call {Icon.arrow}
+          </a>
+        </div>
       </section>
 
       {/* ── HOW ────────────────────────────────────────────────────────────── */}
@@ -1031,7 +1085,7 @@ export default function AiVideoLanding() {
             <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.sm}px` }}>
               No setup fee. No lock-in.
             </h2>
-            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back.</p>
+            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back. <span style={{ color: T.dust, fontWeight: 600 }}>I take six video clients at most.</span></p>
           </Reveal>
           <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', alignItems: 'stretch' }}>
             {TIERS.map((t, i) => (
@@ -1071,12 +1125,12 @@ export default function AiVideoLanding() {
                       </li>
                     ))}
                   </ul>
-                  <a href="#start" className="av-btn" style={{
+                  <a href="#start" onClick={() => setPlan(t.name)} className="av-btn" style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, minHeight: 44,
                     background: t.hot ? T.rouge : 'transparent', color: t.hot ? T.paper : T.dust,
                     boxShadow: t.hot ? 'inset 0 1px 0 rgba(255,255,255,.18)' : `inset 0 0 0 1px rgba(240,233,223,.24)`,
                     textDecoration: 'none', padding: '14px 22px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer',
-                  }}>Start here {Icon.arrow}</a>
+                  }}>Book a call about this plan {Icon.arrow}</a>
                 </div>
               </Reveal>
             ))}
@@ -1168,6 +1222,13 @@ export default function AiVideoLanding() {
               <>
                 <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 4.4vw, 40px)', lineHeight: 1.14, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Tell me what you do.</h2>
                 <p style={{ fontSize: FS.base, lineHeight: 1.62, color: T.muted, margin: `0 0 ${SP.lg}px` }}>Thirty minutes, free, no pitch deck. If it isn&rsquo;t a fit I&rsquo;ll say so on the call.</p>
+                <p style={{ fontSize: FS.sm, lineHeight: 1.6, color: T.dust, margin: `0 0 ${SP.lg}px` }}>You&rsquo;ll talk to {client.founder.name}, the person who makes the videos. Not a salesperson.</p>
+                {plan && (
+                  <p style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: FS.sm, color: T.dust, background: 'rgba(232,168,56,.10)', boxShadow: 'inset 0 0 0 1px rgba(232,168,56,.32)', borderRadius: RA.pill, padding: '7px 8px 7px 15px', margin: `0 0 ${SP.lg}px` }}>
+                    About: <strong style={{ color: T.paper, fontWeight: 600 }}>{plan}</strong>
+                    <button type="button" onClick={() => setPlan('')} aria-label="Clear the chosen plan" style={{ background: 'transparent', border: 'none', color: T.muted, fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: '0 6px', minHeight: 28 }}>×</button>
+                  </p>
+                )}
                 {/* Only name and number are required now. Five mandatory fields on
                     a cold page is a tax on every visitor, and the budget select
                     in particular was asking someone to disqualify themselves
@@ -1200,6 +1261,7 @@ export default function AiVideoLanding() {
                   <button type="submit" disabled={sending} className="av-btn" style={{ minHeight: 52, background: sending ? T.dim : T.rouge, color: T.paper, border: 'none', borderRadius: RA.pill, padding: '16px 28px', fontSize: FS.base, fontWeight: 600, fontFamily: 'inherit', cursor: sending ? 'wait' : 'pointer', marginTop: 4, boxShadow: sending ? 'none' : 'inset 0 1px 0 rgba(255,255,255,.18), 0 16px 40px rgba(217,79,61,.26)' }}>
                     {sending ? 'Sending…' : client.primaryCTA}
                   </button>
+                  <p style={{ fontSize: FS.sm, lineHeight: 1.55, color: T.muted, margin: 0, textAlign: 'center' }}>I reply on WhatsApp within a few hours, {client.hours}.</p>
                 </form>
               </>
             )}
@@ -1257,9 +1319,12 @@ export default function AiVideoLanding() {
       </a>
 
       {/* ── STICKY BAR (mobile only) ───────────────────────────────────────── */}
-      <div className="av-sticky">
-        <a href={`tel:${client.phone}`} onClick={onCall} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>Call</a>
-        <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 2, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{Icon.whatsapp} {client.secondaryCTA}</a>
+      {/* The bar used to be Call + a big WhatsApp, which steered people away
+          from the form, the one thing the ads optimise for. Now the booking
+          button is the big one and WhatsApp is an icon. Call lives in the hero. */}
+      <div className={`av-sticky${formInView ? ' av-sticky--away' : ''}`} aria-hidden={formInView || undefined}>
+        <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" aria-label={`${client.secondaryCTA} — opens WhatsApp`} tabIndex={formInView ? -1 : undefined} className="av-btn" style={{ flex: '0 0 52px', minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, cursor: 'pointer' }}>{Icon.whatsapp}</a>
+        <a href="#start" tabIndex={formInView ? -1 : undefined} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{client.primaryCTA} {Icon.arrow}</a>
       </div>
     </main>
   );
