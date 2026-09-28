@@ -374,17 +374,18 @@ const STEPS = [
   { n: '03', t: 'Get finished videos', d: 'Script written, video made, captions and music on it, ready to post. You will never get raw AI output with your face on it.' },
 ];
 
-/* `was` carries the genuine introductory price, shown against the struck standard
-   price rather than buried as a raw number in a bullet. `wasLabel` exists because
-   the monthly tiers discount a *month* and the one-off discounts a *video* —
-   labelling the single "first month" would be a small lie.
+/* `was` (optional) carries a genuine introductory price, shown against the struck
+   standard price. The 2026-09-26 repricing dropped every introductory discount
+   (the trial is credited to month 1 instead), so no tier sets it today; the
+   render path stays for when one returns.
    Every figure here comes from the founder-confirmed table in
    clients/umevio/growth-system/12-ai-video-growth-plan.md §5.3. Change the plan
    first, then this file — never improvise a price here. */
-const TIERS = [
-  { name: 'Try one', price: '₹5,000', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'No commitment'], hot: false, risk: true, was: '₹3,500', wasLabel: 'first reel · ₹5,000 after' },
-  { name: 'Content engine', price: '₹17,500', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'You approve every script', 'No lock-in, cancel any month'], hot: true, risk: false, was: '₹14,875', wasLabel: 'first month' },
-  { name: 'Double volume', price: '₹30,000', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine'], hot: false, risk: false, was: '₹25,500', wasLabel: 'first month' },
+type Tier = { name: string; price: string; note: string; bullets: string[]; hot: boolean; risk: boolean; was?: string; wasLabel?: string };
+const TIERS: Tier[] = [
+  { name: 'Try one', price: '₹4,999', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'Fully credited to your first month if you continue'], hot: false, risk: true },
+  { name: 'Content engine', price: '₹14,999', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'You approve every script', 'No lock-in, cancel any month'], hot: true, risk: false },
+  { name: 'Double volume', price: '₹26,999', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine', 'Only 2 clients at this volume'], hot: false, risk: false },
 ];
 
 const FAQS = [
@@ -392,7 +393,7 @@ const FAQS = [
   { q: "Can't I just do this myself with the software?", a: 'In principle, yes, the tools are available to anyone. But the software is the easy part. What you would still be doing every single week is choosing the topic, researching it, writing a script that sounds like you, generating, cutting, captioning, scoring and actually shipping it. That is the work, and that is what I sell. If you have those hours free and enjoy that craft, do it yourself. I mean that.' },
   { q: 'How much of my time does this actually take?', a: 'One fifteen-minute recording at the start. After that: send a topic, reply "ok" to a script. That is the whole ongoing commitment.' },
   { q: 'Are you an agency?', a: 'No. One person, me. I run the ads, write the scripts and edit the videos myself. No account managers, nothing handed to a junior. That is also why the client count is capped.' },
-  { q: 'What if I hate the result?', a: 'Buy your first video for ₹3,500 and find out before committing to anything monthly. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
+  { q: 'What if I hate the result?', a: 'Buy one video for ₹4,999 and find out before committing to anything monthly. If you continue, that ₹4,999 comes off your first month. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
   { q: 'Is this allowed on Instagram and YouTube?', a: 'Yes, with disclosure. Both platforms ask you to label realistic AI-generated content, and that label gets applied. The rules exist to stop people passing synthetic footage off as real, which is the opposite of how this is built.' },
   { q: 'Whose account does my avatar live in?', a: 'Mine, operated under a written agreement. It is used only for scripts you approved, never shown or transferred to anyone, deleted within seven days if you ask. Your original recording stays yours and I will send you a copy whenever you want it, so you can rebuild elsewhere if you ever leave.' },
 ];
@@ -1008,7 +1009,7 @@ export default function AiVideoLanding() {
             <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 52px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.sm}px` }}>
               No setup fee. No lock-in.
             </h2>
-            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back.</p>
+            <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Prices plus GST. Billed monthly in advance. Cancel any month and I hand your recording back.</p>
           </Reveal>
           <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', alignItems: 'stretch' }}>
             {TIERS.map((t, i) => (
@@ -1016,7 +1017,7 @@ export default function AiVideoLanding() {
                 <div className="av-card" style={{
                   ...card({ lit: t.hot, radius: RA.lg }),
                   display: 'flex', flexDirection: 'column', padding: '32px 26px',
-                  /* The ₹5,000 tier is the strongest risk-reversal on the page and
+                  /* The Try-one tier is the strongest risk-reversal on the page and
                      used to sit leftmost with the least emphasis, out-designed by
                      the tier beside it. A sage edge gives it its own claim on the
                      eye without competing with the rouge of the headline tier. */
