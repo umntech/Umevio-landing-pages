@@ -403,17 +403,17 @@ const FAQS = [
    relationships and confirmed he would speak to them directly. */
 const LIBRARY = [
   { s: 'd1', v: `${V}/d1-hero.mp4`, p: '/images/ai-video/d1-poster.webp', c: 'Umevio', t: 'One recording, every reel' },
-  { s: 'pro-cost', v: `${V}/pro-cost.mp4`, p: '/images/ai-video/library/pro-cost.webp', c: 'Proalign', t: 'What braces actually cost' },
+  { s: 'pro-refine', v: `${V}/pro-refine.mp4`, p: '/images/ai-video/library/pro-refine.webp', c: 'Proalign', t: "When teeth don't follow the plan" },
   { s: 'mpi-secret', v: `${V}/mpi-secret.mp4`, p: '/images/ai-video/library/mpi-secret.webp', c: 'MPI Invest', t: 'A secret in investing' },
   { s: 'mpi-skills', v: `${V}/mpi-skills.mp4`, p: '/images/ai-video/library/mpi-skills.webp', c: 'MPI Invest', t: 'Skills over salary' },
-  { s: 'pro-age', v: `${V}/pro-age.mp4`, p: '/images/ai-video/library/pro-age.webp', c: 'Proalign', t: 'Is there an age limit?' },
-  { s: 'mpi-dubai', v: `${V}/mpi-dubai.mp4`, p: '/images/ai-video/library/mpi-dubai.webp', c: 'MPI Invest', t: 'The Dubai job' },
+  { s: 'pro-tooth', v: `${V}/pro-tooth.mp4`, p: '/images/ai-video/library/pro-tooth.webp', c: 'Proalign', t: 'One tooth moved after braces' },
+  { s: 'mpi-suit', v: `${V}/mpi-suit.mp4`, p: '/images/ai-video/library/mpi-suit.webp', c: 'MPI Invest', t: 'If someone in a suit says that' },
   { s: 'd2', v: `${V}/d2-beforeafter.mp4`, p: '/images/ai-video/d2-poster.webp', c: 'Umevio', t: 'Raw vs finished' },
   { s: 'mpi-emi', v: `${V}/mpi-emi.mp4`, p: '/images/ai-video/library/mpi-emi.webp', c: 'MPI Invest', t: 'EMI or balance?' },
   { s: 'pro-aligners', v: `${V}/pro-aligners.mp4`, p: '/images/ai-video/library/pro-aligners.webp', c: 'Proalign', t: 'Clear aligners, honestly' },
   { s: 'mpi-everest', v: `${V}/mpi-everest.mp4`, p: '/images/ai-video/library/mpi-everest.webp', c: 'MPI Invest', t: 'Your own Everest' },
   { s: 'pro-rules', v: `${V}/pro-rules.mp4`, p: '/images/ai-video/library/pro-rules.webp', c: 'Proalign', t: 'The aligner rules' },
-  { s: 'mpi-third', v: `${V}/mpi-third.mp4`, p: '/images/ai-video/library/mpi-third.webp', c: 'MPI Invest', t: 'A third property' },
+  { s: 'mpi-number', v: `${V}/mpi-number.mp4`, p: '/images/ai-video/library/mpi-number.webp', c: 'MPI Invest', t: 'Your real term cover number' },
   { s: 'mpi-nro', v: `${V}/mpi-nro.mp4`, p: '/images/ai-video/library/mpi-nro.webp', c: 'MPI Invest', t: 'NRO accounts and TDS' },
   { s: 'mpi-retire', v: `${V}/mpi-retire.mp4`, p: '/images/ai-video/library/mpi-retire.webp', c: 'MPI Invest', t: 'Will AI plan your retirement?' },
 ];
