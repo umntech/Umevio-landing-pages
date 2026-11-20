@@ -680,7 +680,13 @@ const Tile = memo(function Tile({
 
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 
-export default function AiVideoLanding() {
+/* `samples` renders the /samples page: the same page with no prices, sent to
+   leads who already hold a private quote (UAE and partners). It drops the
+   pricing section, the one FAQ that quotes a price, and the India-only lead form
+   (₹ budget, Indian mobile check), and fires no Meta/GA4 events so these
+   visitors never feed the India ad campaign's data. */
+export default function AiVideoLanding({ samples = false }: { samples?: boolean } = {}) {
+  const faqs = samples ? FAQS.filter((f) => !/₹|setup fee/i.test(f.a)) : FAQS;
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [playing, setPlaying] = useState<(typeof LIBRARY)[number] | null>(null);
   const [heroOn, setHeroOn] = useState(false);
@@ -733,14 +739,14 @@ export default function AiVideoLanding() {
     return () => io.disconnect();
   }, []);
 
-  const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent("Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
+  const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(samples ? "Hi Sreevin — I've watched the sample videos and I'd like to talk." : "Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
 
   /* The pixel and the server send the same event under one event_id, so Meta
      counts it once but still gets it when an ad blocker or iOS eats the pixel.
      Phone and name go to our own /api/capi and are hashed there; only the hash
      reaches Meta. Fire-and-forget: tracking must never block a lead or a tap. */
   function track(event: 'Lead' | 'Contact', match: { phone?: string; name?: string }, gtm: Record<string, string>) {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || samples) return;
     const w = window as unknown as { fbq?: (...a: unknown[]) => void; gtag?: (...a: unknown[]) => void; dataLayer?: unknown[] };
     const eventId = crypto.randomUUID();
     /* GA4 runs on plain gtag.js with no GTM container, and gtag ignores
@@ -1093,6 +1099,7 @@ export default function AiVideoLanding() {
       </section>
 
       {/* ── PRICING ────────────────────────────────────────────────────────── */}
+      {!samples && (
       <section style={{ padding: `0 20px ${PAD.normal}` }}>
         <div style={{ maxWidth: 1120, margin: '0 auto' }}>
           <Reveal>
@@ -1152,6 +1159,7 @@ export default function AiVideoLanding() {
           </div>
         </div>
       </section>
+      )}
 
       {/* ── MANIFESTO — the cream inversion ────────────────────────────────────
           The page ran #1C1208 → #141010 → #2A1F12 top to bottom: three values
@@ -1194,7 +1202,7 @@ export default function AiVideoLanding() {
             <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(32px, 5.4vw, 48px)', lineHeight: 1.1, color: T.paper, margin: `0 0 ${SP.xl}px` }}>Questions people actually ask</h2>
           </Reveal>
           <div style={{ display: 'grid', gap: 12 }}>
-            {FAQS.map((f, i) => {
+            {faqs.map((f, i) => {
               const open = openFaq === i;
               return (
                 <div key={i} style={{
@@ -1226,7 +1234,18 @@ export default function AiVideoLanding() {
       <section id="start" style={{ padding: `0 20px ${PAD.wide}`, scrollMarginTop: 20 }}>
         <div style={{ maxWidth: 620, margin: '0 auto' }}>
           <div className="av-grain" style={{ background: `linear-gradient(170deg, rgba(217,79,61,.16), rgba(28,18,8,0) 46%), ${T.surface}`, boxShadow: `inset 0 1px 0 rgba(255,255,255,.09), 0 34px 80px rgba(0,0,0,.34)`, borderRadius: RA.lg, padding: 'clamp(28px, 5vw, 46px)' }}>
-            {sent ? (
+            {samples ? (
+              /* Leads on /samples already have a quote, so no form: just the two
+                 ways to reach the founder directly. */
+              <div style={{ textAlign: 'center' }}>
+                <h2 style={{ fontFamily: SERIF, fontSize: 'clamp(28px, 4.4vw, 40px)', lineHeight: 1.14, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Want this with your face?</h2>
+                <p style={{ fontSize: FS.base, lineHeight: 1.62, color: T.muted, margin: `0 0 ${SP.lg}px` }}>Message me and we&rsquo;ll set up a 30-minute call. You&rsquo;ll talk to {client.founder.name}, the person who makes the videos.</p>
+                <div style={{ display: 'grid', gap: 12, maxWidth: 360, margin: '0 auto' }}>
+                  <a href={wa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 52, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '16px 28px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 16px 40px rgba(217,79,61,.26)', cursor: 'pointer' }}>{Icon.whatsapp} WhatsApp me</a>
+                  <a href={`mailto:${client.email}`} className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 48, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{client.email}</a>
+                </div>
+              </div>
+            ) : sent ? (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div style={{ color: T.sage, marginBottom: SP.md, display: 'flex', justifyContent: 'center' }}>{Icon.check}</div>
                 <h2 style={{ fontFamily: SERIF, fontSize: FS.lg + 4, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Got it.</h2>

@@ -23,6 +23,7 @@ export const client = {
   address:      'Remote · Bangalore & Pune',
   addressFull:  'Remote-first studio · serving Bangalore & Pune',
   hours:        'Mon–Sat · 10am – 7pm',
+  email:        'hello@umevio.com',
   website:      'umevio.com',
   instagram:    '@helloumevio',
 
