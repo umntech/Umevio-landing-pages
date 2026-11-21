@@ -634,6 +634,37 @@ const CSS = `
         @media (min-width: 768px) { .av-sticky { display: none; } }
         .av-tailpad { height: 108px; }
         @media (min-width: 768px) { .av-tailpad { height: 0; } }
+        /* The sticky bar waits until the hero's own booking button has scrolled
+           away: on a phone's first screen the two used to sit on top of each
+           other, the same button twice (2026-11-22 mobile pass). */
+        .av-sticky--pre { transform: translateY(110%); opacity: 0; pointer-events: none; }
+
+        /* ── Floating booking button (desktop) ──
+           Replaces the floating WhatsApp button on /ai-video, where the form is
+           the only path. Same shape and colour, label always visible, appears
+           once the hero button is gone and steps aside when the form is on
+           screen. Phones use the sticky bar instead. */
+        .av-fab--book { gap: 10px; padding: 0 24px 0 22px; transition: opacity .25s ease, transform .25s ease, background-color .2s ease, box-shadow .25s ease; }
+        .av-fab--book .av-fab-label { max-width: 240px; opacity: 1; font-size: ${FS.sm}px; }
+        .av-fab--book:hover, .av-fab--book:focus-visible { padding: 0 24px 0 22px; }
+        .av-fab--away { opacity: 0; transform: translateY(16px); pointer-events: none; }
+        .av-fab--book::before { animation: none; }
+
+        /* ── Pricing ──
+           Four plans stacked was four phone screens of scrolling before the
+           form. On phones it is a swipe row: one card and a peek of the next.
+           Desktop keeps the grid. */
+        .tiers { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); align-items: stretch; }
+        .tiers > * { display: flex; }
+        .tiers > * > * { flex: 1; }
+        .tiers-hint { display: none; }
+        @media (max-width: 767px) {
+          .tiers { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 14px;
+            margin: 0 -20px; padding: 4px 20px 18px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+          .tiers::-webkit-scrollbar { display: none; }
+          .tiers > * { flex: 0 0 84%; scroll-snap-align: center; }
+          .tiers-hint { display: block; }
+        }
       `;
 
 /**
@@ -733,6 +764,9 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
   /* The sticky bar steps aside once the form is on screen: it would otherwise
      sit on top of the fields and the submit button, worst with the keyboard up. */
   const [formInView, setFormInView] = useState(false);
+  /* Starts true so the sticky bar and the desktop booking button stay hidden on
+     the first screen, where the hero's own button is already visible. */
+  const [heroCtaInView, setHeroCtaInView] = useState(true);
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
@@ -752,10 +786,18 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
       document.cookie = `_fbc=fb.1.${Date.now()}.${fbclid}; max-age=${90 * 86400}; path=/; SameSite=Lax; Secure`;
     }
     const form = document.getElementById('start');
-    if (!form || !('IntersectionObserver' in window)) return;
+    if (!form || !('IntersectionObserver' in window)) { setHeroCtaInView(false); return; }
     const io = new IntersectionObserver(([e]) => setFormInView(e.isIntersecting), { threshold: 0.05 });
     io.observe(form);
-    return () => io.disconnect();
+    const heroCta = document.getElementById('hero-cta');
+    let io2: IntersectionObserver | undefined;
+    if (heroCta) {
+      io2 = new IntersectionObserver(([e]) => setHeroCtaInView(e.isIntersecting), { threshold: 0 });
+      io2.observe(heroCta);
+    } else {
+      setHeroCtaInView(false);
+    }
+    return () => { io.disconnect(); io2?.disconnect(); };
   }, []);
 
   const wa = `https://wa.me/${client.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(samples ? "Hi Sreevin — I've watched the sample videos and I'd like to talk." : "Hi Sreevin — I saw the AI video page and I'd like to know more.")}`;
@@ -910,7 +952,7 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
                 only on /samples, which has no form; on /ai-video WhatsApp is
                 offered after the form is sent, plus one footer link. */}
             <div style={{ display: 'grid', gap: 12, margin: `${SP.xl}px 0 0`, maxWidth: 420 }}>
-              <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
+              <a id="hero-cta" href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
                 {client.primaryCTA} {Icon.arrow}
               </a>
               {samples && (
@@ -1144,7 +1186,8 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
             </h2>
             <p style={{ fontSize: FS.base, color: T.muted, margin: `0 0 ${SP.xl}px`, maxWidth: 560 }}>Billed monthly in advance. Cancel any month and I hand your recording back. <span style={{ color: T.dust, fontWeight: 600 }}>I take six video clients at most.</span></p>
           </Reveal>
-          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))', alignItems: 'stretch' }}>
+          <p className="tiers-hint" style={{ fontSize: FS.sm, color: T.muted, margin: `-${SP.md}px 0 ${SP.md}px` }}>Swipe to compare plans &rarr;</p>
+          <div className="tiers">
             {TIERS.map((t, i) => (
               <Reveal key={i} delay={i * 80}>
                 <div className="av-card" style={{
@@ -1398,11 +1441,24 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
       </a>
       )}
 
+      {/* ── FLOATING BOOKING BUTTON (desktop, /ai-video) ───────────────────── */}
+      {!samples && (
+        <a
+          href="#start"
+          className={`av-fab av-fab--book${heroCtaInView || formInView ? ' av-fab--away' : ''}`}
+          aria-hidden={heroCtaInView || formInView || undefined}
+          tabIndex={heroCtaInView || formInView ? -1 : undefined}
+        >
+          <span className="av-fab-label">{client.primaryCTA}</span>
+          {Icon.arrow}
+        </a>
+      )}
+
       {/* ── STICKY BAR (mobile only) ───────────────────────────────────────── */}
       {/* The bar used to be Call + a big WhatsApp, which steered people away
           from the form, the one thing the ads optimise for. Now the booking
           button is the big one and WhatsApp is an icon. Call lives in the hero. */}
-      <div className={`av-sticky${formInView ? ' av-sticky--away' : ''}`} aria-hidden={formInView || undefined}>
+      <div className={`av-sticky${formInView ? ' av-sticky--away' : ''}${heroCtaInView && !formInView ? ' av-sticky--pre' : ''}`} aria-hidden={formInView || heroCtaInView || undefined}>
         {samples && (
         <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" aria-label={`${client.secondaryCTA} — opens WhatsApp`} tabIndex={formInView ? -1 : undefined} className="av-btn" style={{ flex: '0 0 52px', minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, cursor: 'pointer' }}>{Icon.whatsapp}</a>
         )}
