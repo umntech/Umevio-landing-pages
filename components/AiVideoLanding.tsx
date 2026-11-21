@@ -378,22 +378,36 @@ const STEPS = [
    standard price. The 2026-09-26 repricing dropped every introductory discount
    (the trial is credited to month 1 instead), so no tier sets it today; the
    render path stays for when one returns.
-   Every figure here comes from the founder-confirmed table in
-   clients/umevio/growth-system/12-ai-video-growth-plan.md §5.3. Change the plan
-   first, then this file — never improvise a price here. */
+   Every figure here comes from the founder-approved India prices of 2026-11-22
+   (Learn DM/Meta Campaign Workflow/clients/umevio/client-facts.md). Change that
+   record first, then this file — never improvise a price here. */
 type Tier = { name: string; price: string; note: string; bullets: string[]; hot: boolean; risk: boolean; was?: string; wasLabel?: string };
 const TIERS: Tier[] = [
-  { name: 'Try one', price: '₹4,999', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'Fully credited to your first month if you continue'], hot: false, risk: true },
-  { name: 'Content engine', price: '₹14,999', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'You approve every script', 'No lock-in, cancel any month'], hot: true, risk: false },
-  { name: 'Double volume', price: '₹26,999', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine', 'Only 2 clients at this volume'], hot: false, risk: false },
+  { name: 'Try one', price: '₹3,999', note: 'a single finished video', bullets: ['One reel, start to finish', 'Script written for you', 'Fully credited to your first month if you continue'], hot: false, risk: true },
+  { name: 'Content engine', price: '₹12,999', note: 'per month · 4 finished reels', bullets: ['One reel every week', 'Avatar + voice setup free', 'You approve every script', '2 rounds of changes on every reel', 'No lock-in, cancel any month'], hot: true, risk: false },
+  { name: 'Double volume', price: '₹22,999', note: 'per month · 8 finished reels', bullets: ['Two reels every week', 'Everything in the engine', 'Only 2 clients at this volume'], hot: false, risk: false },
+  { name: 'Three a week', price: '₹29,999', note: 'per month · 12 finished reels', bullets: ['Three reels every week', 'Everything in the engine', 'Lowest price per reel', 'Only 2 clients at this volume'], hot: false, risk: false },
 ];
+
+/* Message match for the Meta ads (fresh Meta workflow, Stage 3, 2026-11-22).
+   One page serves both concepts; the hero echoes the ad that was tapped,
+   picked from utm_content (K1 / K2 in the ad's URL tag). Everything below the
+   hero is shared. Copy follows the concept cards: speed is stated as how the
+   service works (no shoot day), never as a turnaround number, and nothing
+   implies viewers can't tell it is AI. */
+type Hero = { h1a: string; h1b: string; hot: string; lede: string };
+const HEROES: Record<'base' | 'k1' | 'k2', Hero> = {
+  base: { h1a: 'Your own AI avatar.', h1b: 'A reel ', hot: 'every week', lede: 'For owners and experts who are the face of their business, without the shoots or the camera.' },
+  k1: { h1a: 'No shoot day.', h1b: 'Your reel, out while the ', hot: 'topic is live', lede: 'For owners who already pay for shoots, and still post after the moment has passed.' },
+  k2: { h1a: 'On video every week.', h1b: 'Never on ', hot: 'camera again', lede: 'For the face of the business who would rather not be filmed. Every video is labelled as AI.' },
+};
 
 const FAQS = [
   { q: 'Will my audience feel tricked?', a: 'They should not, because nothing is hidden. The video is labelled as AI, the words are yours, and you approve every script before it exists. Where a platform asks for an AI label, it gets one. The people who get into trouble here are the ones pretending, and that is a choice they made, not something the format did to them.' },
   { q: "Can't I just do this myself with the software?", a: 'In principle, yes, the tools are available to anyone. But the software is the easy part. What you would still be doing every single week is choosing the topic, researching it, writing a script that sounds like you, generating, cutting, captioning, scoring and actually shipping it. That is the work, and that is what I sell. If you have those hours free and enjoy that craft, do it yourself. I mean that.' },
   { q: 'How much of my time does this actually take?', a: 'One fifteen-minute recording at the start. After that: send a topic, reply "ok" to a script. That is the whole ongoing commitment.' },
   { q: 'Are you an agency?', a: 'No. One person, me. I run the ads, write the scripts and edit the videos myself. No account managers, nothing handed to a junior. That is also why the client count is capped.' },
-  { q: 'What if I hate the result?', a: 'Buy one video for ₹4,999 and find out before committing to anything monthly. If you continue, that ₹4,999 comes off your first month. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
+  { q: 'What if I hate the result?', a: 'Buy one video for ₹3,999 and find out before committing to anything monthly. If you continue, that ₹3,999 comes off your first month. Every reel includes two rounds of changes. There is no setup fee and no lock-in on the monthly plan either. If it stops working, stop, and I hand your recording back.' },
   { q: 'Is this allowed on Instagram and YouTube?', a: 'Yes, with disclosure. Both platforms ask you to label realistic AI-generated content, and that label gets applied. The rules exist to stop people passing synthetic footage off as real, which is the opposite of how this is built.' },
   { q: 'Whose account does my avatar live in?', a: 'Mine, operated under a written agreement. It is used only for scripts you approved, never shown or transferred to anyone, deleted within seven days if you ask. Your original recording stays yours and I will send you a copy whenever you want it, so you can rebuild elsewhere if you ever leave.' },
 ];
@@ -714,6 +728,8 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
      Both ride along in the lead email so a booked call can be traced back. */
   const [plan, setPlan] = useState('');
   const [utm, setUtm] = useState<Record<string, string>>({});
+  const [heroKey, setHeroKey] = useState<'base' | 'k1' | 'k2'>('base');
+  const hero = HEROES[samples ? 'base' : heroKey];
   /* The sticky bar steps aside once the form is on screen: it would otherwise
      sit on top of the fields and the submit button, worst with the keyboard up. */
   const [formInView, setFormInView] = useState(false);
@@ -723,6 +739,9 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
     const keep: Record<string, string> = {};
     ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach((k) => { const v = q.get(k); if (v) keep[k] = v; });
     setUtm(keep);
+    const uc = (keep.utm_content || '').toUpperCase();
+    if (/(^|[^A-Z0-9])K1([^0-9]|$)/.test(uc)) setHeroKey('k1');
+    else if (/(^|[^A-Z0-9])K2([^0-9]|$)/.test(uc)) setHeroKey('k2');
     /* fbc = Meta's click ID, which ties a lead to the exact ad click. The pixel
        writes the _fbc cookie itself, but it loads lazily and some browsers block
        it, so CAPI events often went without one (Events Manager flagged low fbc
@@ -795,8 +814,20 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr('');
+    if (!name.trim()) {
+      setErr('Please add your name.');
+      return;
+    }
     if (!/^[6-9]\d{9}$/.test(phone.replace(/\D/g, '').slice(-10))) {
       setErr('That does not look like a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (!work.trim()) {
+      setErr('Tell me what you do, so I can come to the call prepared.');
+      return;
+    }
+    if (!budget) {
+      setErr('Please choose a budget range, so we can tell quickly if this fits.');
       return;
     }
     setSending(true);
@@ -853,7 +884,7 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
             {/* Was "Record once. Post every day." — a promise the 4-reels-a-month
                 plan does not keep. Now matches the ads' "your own AI avatar". */}
             <h1 style={{ fontFamily: SERIF, fontSize: 'clamp(46px, 9.4vw, 88px)', lineHeight: 1.0, letterSpacing: '-0.025em', margin: `${SP.lg}px 0 0`, color: T.paper, maxWidth: 900 }}>
-              Your own AI avatar.<br />A reel <span style={{ color: T.rouge }}>every week</span>.
+              {hero.h1a}<br />{hero.h1b}<span style={{ color: T.rouge }}>{hero.hot}</span>.
             </h1>
           </Reveal>
 
@@ -862,7 +893,7 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
               before this, every word of body copy was Outfit. */}
           <Reveal delay={120}>
             <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 'clamp(19px, 2.4vw, 25px)', lineHeight: 1.5, color: T.dust, margin: `${SP.lg}px 0 0`, maxWidth: 580 }}>
-              For doctors, coaches and founders who can&rsquo;t keep filming.
+              {hero.lede}
             </p>
           </Reveal>
 
@@ -873,13 +904,16 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
           </Reveal>
 
           <Reveal delay={200}>
-            {/* The form is the conversion, so the booking button gets a row to
-                itself; WhatsApp and Call sit under it, quieter, for people who
-                would rather talk now. */}
+            {/* The form is the conversion. Since 2026-11-22 it is the ONLY path on
+                /ai-video (founder decision: quality over volume, so every lead
+                answers the qualifying questions first). WhatsApp and Call stay
+                only on /samples, which has no form; on /ai-video WhatsApp is
+                offered after the form is sent, plus one footer link. */}
             <div style={{ display: 'grid', gap: 12, margin: `${SP.xl}px 0 0`, maxWidth: 420 }}>
               <a href="#start" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 10, background: T.rouge, color: T.paper, textDecoration: 'none', padding: '17px 30px', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.base, minHeight: 44, boxShadow: 'inset 0 1px 0 rgba(255,255,255,.18), 0 18px 46px rgba(217,79,61,.30)', cursor: 'pointer' }}>
                 {client.primaryCTA} {Icon.arrow}
               </a>
+              {samples && (
               <div style={{ display: 'flex', gap: 12 }}>
                 <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: 'transparent', color: T.dust, textDecoration: 'none', padding: '13px 18px', borderRadius: RA.pill, fontWeight: 500, fontSize: FS.sm, minHeight: 44, boxShadow: `inset 0 0 0 1px rgba(240,233,223,.22)`, cursor: 'pointer' }}>
                   {Icon.whatsapp} WhatsApp
@@ -888,6 +922,7 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
                   Call
                 </a>
               </div>
+              )}
             </div>
           </Reveal>
 
@@ -1250,7 +1285,7 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
                 <div style={{ color: T.sage, marginBottom: SP.md, display: 'flex', justifyContent: 'center' }}>{Icon.check}</div>
                 <h2 style={{ fontFamily: SERIF, fontSize: FS.lg + 4, color: T.paper, margin: `0 0 ${SP.sm}px` }}>Got it.</h2>
                 <p style={{ fontSize: FS.base, lineHeight: 1.65, color: T.muted, margin: `0 0 ${SP.lg}px` }}>I&rsquo;ll message you personally, usually within a few hours, during working hours ({client.hours}).</p>
-                <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Or message me now</a>
+                <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" className="av-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minHeight: 44, background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', padding: '14px 24px', borderRadius: RA.pill, fontWeight: 500, cursor: 'pointer' }}>{Icon.whatsapp} Want to chat now? WhatsApp me</a>
               </div>
             ) : (
               <>
@@ -1263,11 +1298,11 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
                     <button type="button" onClick={() => setPlan('')} aria-label="Clear the chosen plan" style={{ background: 'transparent', border: 'none', color: T.muted, fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: '0 6px', minHeight: 28 }}>×</button>
                   </p>
                 )}
-                {/* Only name and number are required now. Five mandatory fields on
-                    a cold page is a tax on every visitor, and the budget select
-                    in particular was asking someone to disqualify themselves
-                    before they were sold. The qualifying questions stay on the
-                    form — marked optional — rather than blocking the send. */}
+                {/* 2026-11-22: "What do you do?" and budget are REQUIRED again. The
+                    campaign now optimises for serious buyers who can pay, not
+                    lead volume, and these two answers are the cheapest filter
+                    there is (founder decision, fresh Meta workflow 1f). Only the
+                    "what stopped you" question stays optional. */}
                 <form onSubmit={submit} style={{ display: 'grid', gap: SP.md }} noValidate>
                   <Field label="Your name" htmlFor="f-name">
                     <input id="f-name" className="av-in" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Priya Nair" style={inputStyle} />
@@ -1275,18 +1310,18 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
                   <Field label="WhatsApp number" htmlFor="f-phone">
                     <input id="f-phone" className="av-in" required inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile" style={inputStyle} />
                   </Field>
-                  <Field label="What do you do?" htmlFor="f-work" optional>
-                    <input id="f-work" className="av-in" value={work} onChange={(e) => setWork(e.target.value)} placeholder="e.g. career coach for mid-career switchers" style={inputStyle} />
+                  <Field label="What do you do?" htmlFor="f-work">
+                    <input id="f-work" className="av-in" required value={work} onChange={(e) => setWork(e.target.value)} placeholder="e.g. career coach for mid-career switchers" style={inputStyle} />
                   </Field>
                   <Field label="What's stopped you posting video so far?" htmlFor="f-blocker" optional>
                     <textarea id="f-blocker" className="av-in" rows={3} value={blocker} onChange={(e) => setBlocker(e.target.value)} placeholder="Be honest, this is the useful bit" style={{ ...inputStyle, resize: 'vertical' }} />
                   </Field>
-                  <Field label="Budget comfort" htmlFor="f-budget" optional>
-                    <select id="f-budget" className="av-select" value={budget} onChange={(e) => setBudget(e.target.value)} style={inputStyle}>
+                  <Field label="Budget comfort" htmlFor="f-budget">
+                    <select id="f-budget" className="av-select" required value={budget} onChange={(e) => setBudget(e.target.value)} style={inputStyle}>
                       <option value="">Choose one</option>
-                      <option value="lt10">Under ₹10,000 a month</option>
-                      <option value="10-20">₹10,000 – ₹20,000 a month</option>
-                      <option value="20plus">₹20,000+ a month</option>
+                      <option value="lt12">Under ₹12,000 a month</option>
+                      <option value="12-25">₹12,000 – ₹25,000 a month</option>
+                      <option value="25plus">₹25,000+ a month</option>
                     </select>
                   </Field>
 
@@ -1310,6 +1345,12 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
         </p>
         <p style={{ fontSize: FS.sm, color: T.dim, margin: '0 0 6px' }}>{client.founder.name} · {client.address}</p>
         <p style={{ fontSize: FS.sm, color: T.dim, margin: 0 }}>{client.instagram} · {client.website}</p>
+        {!samples && (
+          <p style={{ fontSize: FS.sm, color: T.dim, margin: `${SP.sm}px 0 0` }}>
+            Questions before booking?{' '}
+            <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" style={{ color: T.muted, textDecoration: 'underline', textUnderlineOffset: 3 }}>WhatsApp me</a>
+          </p>
+        )}
         <p style={{ fontSize: FS.sm, margin: `${SP.sm}px 0 0` }}>
           <a href="/ai-video/privacy" style={{ color: T.muted, textDecoration: 'underline', textUnderlineOffset: 3 }}>Privacy policy</a>
         </p>
@@ -1342,7 +1383,8 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
         </div>
       )}
 
-      {/* ── FLOATING WHATSAPP (desktop) ────────────────────────────────────── */}
+      {/* ── FLOATING WHATSAPP (desktop, /samples only since 2026-11-22) ──────── */}
+      {samples && (
       <a
         href={wa}
         onClick={onWa}
@@ -1354,13 +1396,16 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
         {Icon.whatsapp}
         <span className="av-fab-label">{client.secondaryCTA}</span>
       </a>
+      )}
 
       {/* ── STICKY BAR (mobile only) ───────────────────────────────────────── */}
       {/* The bar used to be Call + a big WhatsApp, which steered people away
           from the form, the one thing the ads optimise for. Now the booking
           button is the big one and WhatsApp is an icon. Call lives in the hero. */}
       <div className={`av-sticky${formInView ? ' av-sticky--away' : ''}`} aria-hidden={formInView || undefined}>
+        {samples && (
         <a href={wa} onClick={onWa} target="_blank" rel="noopener noreferrer" aria-label={`${client.secondaryCTA} — opens WhatsApp`} tabIndex={formInView ? -1 : undefined} className="av-btn" style={{ flex: '0 0 52px', minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', boxShadow: `inset 0 0 0 1px rgba(240,233,223,.24)`, color: T.dust, textDecoration: 'none', borderRadius: RA.pill, cursor: 'pointer' }}>{Icon.whatsapp}</a>
+        )}
         <a href="#start" tabIndex={formInView ? -1 : undefined} className="av-btn" style={{ flex: 1, minHeight: 48, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 9, background: T.rouge, color: T.paper, textDecoration: 'none', borderRadius: RA.pill, fontWeight: 600, fontSize: FS.sm, cursor: 'pointer' }}>{client.primaryCTA} {Icon.arrow}</a>
       </div>
     </main>
