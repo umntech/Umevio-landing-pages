@@ -772,6 +772,21 @@ export default function AiVideoLanding({ samples = false }: { samples?: boolean 
     const q = new URLSearchParams(window.location.search);
     const keep: Record<string, string> = {};
     ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid'].forEach((k) => { const v = q.get(k); if (v) keep[k] = v; });
+    /* Remember the ad tags on this phone for 30 days (2026-11-22), so a visitor
+       who taps the ad, leaves, and comes back later by typing the address still
+       reports which ad (K1/K2) brought them. Fresh tags in the URL always win.
+       Storage can be blocked (private mode); then this is simply skipped. */
+    const UTM_KEY = 'umevio_ai_video_utm';
+    try {
+      if (Object.keys(keep).length) {
+        localStorage.setItem(UTM_KEY, JSON.stringify({ at: Date.now(), tags: keep }));
+      } else {
+        const saved = JSON.parse(localStorage.getItem(UTM_KEY) || 'null');
+        if (saved && Date.now() - saved.at < 30 * 86400 * 1000 && saved.tags) {
+          Object.assign(keep, saved.tags, { utm_returning: 'yes' });
+        }
+      }
+    } catch { /* storage unavailable: use this visit's tags only */ }
     setUtm(keep);
     const uc = (keep.utm_content || '').toUpperCase();
     if (/(^|[^A-Z0-9])K1([^0-9]|$)/.test(uc)) setHeroKey('k1');
